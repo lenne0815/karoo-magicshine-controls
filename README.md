@@ -17,7 +17,7 @@ This release is the first feature-complete public beta for the tested light fami
 
 ## Supported Light
 
-The current implementation was reverse engineered and tested against:
+The current implementation is currently tested against:
 
 - `M2-B0 EVO_1700`
 
@@ -32,15 +32,6 @@ Discovery currently supports the known Magicshine naming pattern and the app let
 5. Choose `LOW`, `HIGH`, or `OFF`.
 6. Use `25`, `50`, `75`, `100`, `SOS`, or `FLASH`.
 7. Press `DISCONNECT` when finished.
-
-## Protocol Notes
-
-The app talks to the light over the proprietary Magicshine BLE protocol on:
-
-- service `FFE1`
-- characteristic `FFE0`
-
-Reverse-engineering notes are kept in [PROTOCOL_NOTES.md](PROTOCOL_NOTES.md).
 
 ## Build
 
@@ -72,7 +63,7 @@ adb shell am start -n com.lenne0815.karoomagicshine/.MainActivity
 
 ## Current Caveats
 
-- The current implementation is tuned to the tested Magicshine protocol variant, not the full Magicshine product line.
+- The current implementation is tuned to the tested light variant, not the full Magicshine product line.
 - The Karoo UI is the primary target; generic phone layouts are not a focus yet.
 
 ## License
