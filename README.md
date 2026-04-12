@@ -33,34 +33,6 @@ Discovery currently supports the known Magicshine naming pattern and the app let
 6. Use `25`, `50`, `75`, `100`, `SOS`, or `FLASH`.
 7. Press `DISCONNECT` when finished.
 
-## Build
-
-Requirements:
-
-- JDK 17
-- Android SDK
-- Gradle wrapper
-
-Build debug APK:
-
-```bash
-./gradlew assembleDebug
-```
-
-Install on a Karoo with USB debugging enabled:
-
-```bash
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-adb shell am start -n com.lenne0815.karoomagicshine/.MainActivity
-```
-
-## Project Details
-
-- Application ID: `com.lenne0815.karoomagicshine`
-- Compile SDK: `35`
-- Target SDK: `34`
-- Min SDK: `26`
-
 ## Current Caveats
 
 - The current implementation is tuned to the tested light variant, not the full Magicshine product line.
