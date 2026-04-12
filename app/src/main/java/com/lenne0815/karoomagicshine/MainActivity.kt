@@ -302,6 +302,7 @@ class MainActivity : AppCompatActivity() {
     private fun refreshLampSelectionUi() {
         val selectedLamp = controller.currentSelectedLamp()
         val candidates = controller.currentLampCandidates()
+        val unsupportedCandidates = controller.currentUnsupportedLampCandidates()
         val preferredAddress = controller.currentPreferredAddress()
         currentSelectedLampAddress = preferredAddress
         if (selectedLamp != null && currentSelectedLampName != selectedLamp.name) {
@@ -316,12 +317,20 @@ class MainActivity : AppCompatActivity() {
         changeLampLabel.text = selectedLamp?.name ?: currentSelectedLampName ?: "Switch lamp"
 
         chooserHintView.text = if (candidates.isEmpty()) {
-            "Searching for M2-B0 EVO_1700"
+            if (unsupportedCandidates.isEmpty()) {
+                "Searching for supported lamps"
+            } else {
+                "Select a supported lamp or allow another M2-B0 model"
+            }
         } else {
             "Tap to select"
         }
 
-        val signature = candidates.joinToString("|") { "${it.address}:${it.name}" }
+        val signature = buildString {
+            append(candidates.joinToString("|") { "${it.address}:${it.name}" })
+            append("::")
+            append(unsupportedCandidates.joinToString("|") { "${it.address}:${it.name}" })
+        }
         if (signature == lastRenderedCandidateSignature) return
         lastRenderedCandidateSignature = signature
 
@@ -342,6 +351,44 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             lampCandidatesLayout.addView(button)
+        }
+
+        if (unsupportedCandidates.isNotEmpty()) {
+            val title = TextView(this).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).also { it.topMargin = dpToPx(8) }
+                text = "Other M2-B0 models"
+                textSize = 11f
+            }
+            lampCandidatesLayout.addView(title)
+
+            unsupportedCandidates
+                .distinctBy { it.name.lowercase() }
+                .forEach { candidate ->
+                    val button = Button(this).apply {
+                        layoutParams = LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT,
+                            dpToPx(44),
+                        ).also { it.topMargin = dpToPx(4) }
+                        text = "Allow ${candidate.name}"
+                        textSize = 11f
+                        setOnClickListener {
+                            controller.approveDeviceName(candidate.name)
+                            val approvedCandidate = controller.currentLampCandidates()
+                                .firstOrNull { it.name.equals(candidate.name, ignoreCase = true) }
+                            if (approvedCandidate != null) {
+                                saveSelectedLamp(approvedCandidate.address, approvedCandidate.name)
+                                controller.setPreferredAddress(approvedCandidate.address)
+                            } else {
+                                controller.startDiscovery(forceRestart = true)
+                            }
+                            refreshLampSelectionUi()
+                        }
+                    }
+                    lampCandidatesLayout.addView(button)
+                }
         }
     }
 

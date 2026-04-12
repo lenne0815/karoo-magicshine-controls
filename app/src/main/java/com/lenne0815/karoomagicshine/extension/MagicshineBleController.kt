@@ -42,9 +42,14 @@ class MagicshineBleController(
 ) {
     companion object {
         private const val TAG = "MagicshineBle"
-        private const val KNOWN_DEVICE_NAME = "M2-B0 EVO_1700"
+        val SUPPORTED_DEVICE_NAMES = setOf(
+            "M2-B0 EVO_1700",
+            "M2-B0 EVO1300",
+            "M2-B0 EVO_1300",
+        )
         private const val PREFS_NAME = "magicshine_prefs"
         private const val PREF_SELECTED_LAMP_ADDRESS = "selected_lamp_address"
+        private const val PREF_ALLOWED_DEVICE_NAMES = "allowed_device_names"
         @Volatile private var shared: MagicshineBleController? = null
         fun getShared(
             context: Context,
@@ -103,7 +108,10 @@ class MagicshineBleController(
     private val operationMutex = Mutex()
     private val candidateLock = Any()
     private val knownCandidates = LinkedHashMap<String, LampCandidate>()
+    private val unsupportedCandidates = LinkedHashMap<String, LampCandidate>()
     private val knownPeripherals = LinkedHashMap<String, Peripheral>()
+    @Volatile private var allowedDeviceNames: Set<String> =
+        (prefs.getStringSet(PREF_ALLOWED_DEVICE_NAMES, emptySet()) ?: emptySet()).toSet()
 
     fun startDiscovery(forceRestart: Boolean = false) {
         if (!forceRestart && lastPeripheral?.state?.value is ConnectionState.Connected) {
@@ -118,6 +126,7 @@ class MagicshineBleController(
             lastSeenTag = "none"
             synchronized(candidateLock) {
                 knownCandidates.clear()
+                unsupportedCandidates.clear()
                 knownPeripherals.clear()
             }
         } else if (discoveryJob?.isActive == true) {
@@ -142,13 +151,17 @@ class MagicshineBleController(
                         seenCount += 1
                         lastSeenTag = tag
 
-                        val matches = name.equals(KNOWN_DEVICE_NAME, true)
+                        val matchedName = supportedDeviceNames().firstOrNull { supported ->
+                            name.equals(supported, ignoreCase = true)
+                        }
+                        val looksLikeSupportedFamily = name.startsWith("M2-B0", ignoreCase = true)
 
-                        if (matches) {
-                            val candidate = LampCandidate(address = p.address, name = KNOWN_DEVICE_NAME)
+                        if (matchedName != null) {
+                            val candidate = LampCandidate(address = p.address, name = matchedName)
                             val preferred = preferredAddress
                             synchronized(candidateLock) {
                                 knownCandidates[p.address] = candidate
+                                unsupportedCandidates.remove(p.address)
                                 knownPeripherals[p.address] = p
                             }
                             if (preferred != null && preferred == p.address) {
@@ -158,6 +171,12 @@ class MagicshineBleController(
                                 if (isNewTarget) {
                                     publishStatus("found")
                                 }
+                            }
+                        } else if (looksLikeSupportedFamily) {
+                            val candidate = LampCandidate(address = p.address, name = name)
+                            synchronized(candidateLock) {
+                                unsupportedCandidates[p.address] = candidate
+                                knownPeripherals[p.address] = p
                             }
                         }
                     }
@@ -196,10 +215,27 @@ class MagicshineBleController(
         knownCandidates.values.toList()
     }
 
+    fun currentUnsupportedLampCandidates(): List<LampCandidate> = synchronized(candidateLock) {
+        unsupportedCandidates.values.toList()
+    }
+
+    fun approveDeviceName(name: String) {
+        val updated = (allowedDeviceNames + name).toSortedSet(String.CASE_INSENSITIVE_ORDER)
+        allowedDeviceNames = updated
+        prefs.edit().putStringSet(PREF_ALLOWED_DEVICE_NAMES, updated).apply()
+        synchronized(candidateLock) {
+            val promoted = unsupportedCandidates.values.filter { it.name.equals(name, ignoreCase = true) }
+            promoted.forEach { candidate ->
+                knownCandidates[candidate.address] = candidate
+                unsupportedCandidates.remove(candidate.address)
+            }
+        }
+    }
+
     fun currentSelectedLamp(): LampCandidate? {
         val selected = preferredAddress ?: return null
         return synchronized(candidateLock) { knownCandidates[selected] }
-            ?: lastPeripheral?.let { LampCandidate(it.address, it.name ?: KNOWN_DEVICE_NAME) }
+            ?: lastPeripheral?.let { LampCandidate(it.address, it.name ?: "Magicshine") }
     }
 
     fun connect() {
@@ -493,6 +529,8 @@ class MagicshineBleController(
         }
         MagicshineProtocol.parseTemperatureCelsius(frameHex)?.let { publishTemperatureStatus("${it}C") }
     }
+
+    private fun supportedDeviceNames(): Set<String> = SUPPORTED_DEVICE_NAMES + allowedDeviceNames
 
     private suspend fun waitUntil(
         timeoutMs: Long,
