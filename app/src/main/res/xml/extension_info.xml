@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ExtensionInfo
+    id="karoo-magicshine-controls"
+    displayName="@string/app_name"
+    icon="@drawable/ic_launcher"
+    scansDevices="false">
+
+    <DataType
+        typeId="DATATYPE_LIGHT_CONTROLS"
+        displayName="@string/field_light_controls"
+        description="@string/field_light_controls_desc"
+        icon="@drawable/ic_launcher"
+        graphical="true" />
+
+    <BonusAction actionId="light-off" displayName="@string/action_light_off" />
+    <BonusAction actionId="light-10" displayName="@string/action_light_10" />
+    <BonusAction actionId="light-100" displayName="@string/action_light_100" />
+</ExtensionInfo>

@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Karoo Magicshine Controls</string>
+    <string name="action_light_off">Magicshine Light OFF</string>
+    <string name="action_light_10">Magicshine Light 10%</string>
+    <string name="action_light_100">Magicshine Light 100%</string>
+    <string name="field_light_controls">Light Controls</string>
+    <string name="field_light_controls_desc">Tap OFF/10/100 directly in the field</string>
+</resources>

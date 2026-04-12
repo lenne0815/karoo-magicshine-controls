@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="purple_200">#FFBB86FC</color>
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="teal_700">#FF018786</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="karoo_orange">#FFFF6B00</color>
+    <color name="karoo_dark">#FF1A1A1A</color>
+    <color name="karoo_ui_green">#FF20D39B</color>
+    <color name="karoo_ui_green_dark">#FF18B987</color>
+    <color name="karoo_ui_green_soft">#FF76DEC0</color>
+    <color name="karoo_ui_card">#FF6B6B6B</color>
+    <color name="karoo_ui_card_dark">#FF575757</color>
+    <color name="karoo_ui_card_light">#FFF1F1F1</color>
+    <color name="karoo_ui_text_dark">#FF1A1A1A</color>
+</resources>
