@@ -7,5 +7,5 @@
   "latestVersionCode": 21,
   "developer": "Lennart Thomsen",
   "description": "Control supported Magicshine lights from the Karoo app or the in-ride field, with lamp selection, quick beam switching, and battery and temperature telemetry.",
-  "releaseNotes": "* Expanded the selector gate to BLE names starting with M2-B0, M2-BO, M1-B0, and M1-BO.\n* Improved cold-boot ride auto-connect so the light can reconnect from the ride side without opening the app first.\n* Added the split in-ride field with direct light control on the left and app launch on the right.\n* Improved shared app and ride state syncing for LOW/HIGH and the remembered last light state.\n* Refreshed the launcher branding with the new flashlight icon."
+  "releaseNotes": "* Added ride screen button\n* Added lamp selector gate\n* Added support for M2-B0 / M2-BO / M1-B0 / M1-BO lamps\n* Improved ride auto-connect and disconnect\n* Improved app and ride state sync\n* Refreshed icon and app metadata"
 }

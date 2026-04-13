@@ -16,11 +16,12 @@ Magicshine Controls is a Karoo app plus ride-field extension for controlling sup
 
 ### Beta 1.2
 
-- expanded selector gate support for `M2-B0`, `M2-BO`, `M1-B0`, and `M1-BO` BLE name families
-- improved cold-boot ride auto-connect so the light can connect from the ride side without opening the app first
-- added the split in-ride field workflow: left side controls the lamp, right side opens the app
-- tightened app and ride state syncing so `LOW`/`HIGH` and the remembered last state stay aligned
-- refreshed launcher branding with the new flashlight icon
+- added ride screen button
+- added lamp selector gate
+- added support for `M2-B0` / `M2-BO` / `M1-B0` / `M1-BO` lamps
+- improved ride auto-connect and disconnect
+- improved app and ride state sync
+- refreshed icon and app metadata
 
 ## Supported Light Families
 
