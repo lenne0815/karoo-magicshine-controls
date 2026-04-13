@@ -1,26 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/btnFieldToggle"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:padding="4dp">
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_lamp_switch"
+    android:gravity="center"
+    android:orientation="horizontal"
+    android:paddingStart="4dp"
+    android:paddingEnd="4dp">
 
-    <Button
-        android:id="@+id/btnFieldOff"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="OFF" />
+    <ImageView
+        android:id="@+id/imgFieldToggle"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:contentDescription="@null"
+        android:src="@drawable/ic_flash_on"
+        android:tint="#FFFFFFFF" />
 
-    <Button
-        android:id="@+id/btnField10"
-        android:layout_width="match_parent"
+    <TextView
+        android:id="@+id/txtFieldToggleLabel"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="10%" />
-
-    <Button
-        android:id="@+id/btnField100"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="100%" />
+        android:layout_marginStart="8dp"
+        android:text="OFF"
+        android:textColor="#FFFFFFFF"
+        android:textSize="24sp"
+        android:textStyle="bold" />
 
 </LinearLayout>

@@ -1,9 +1,13 @@
 package com.lenne0815.karoomagicshine
 
 import android.Manifest
+import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.IBinder
 import android.os.Bundle
 import android.widget.Button
 import android.widget.LinearLayout
@@ -15,7 +19,9 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.lenne0815.karoomagicshine.extension.LampCandidate
-import com.lenne0815.karoomagicshine.extension.MagicshineBleController
+import com.lenne0815.karoomagicshine.extension.AppUiState
+import com.lenne0815.karoomagicshine.extension.MagicshineControlService
+import com.lenne0815.karoomagicshine.extension.SharedLightState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -32,7 +38,7 @@ class MainActivity : AppCompatActivity() {
         private const val PREF_SELECTED_LAMP_NAME = "selected_lamp_name"
     }
 
-    private lateinit var controller: MagicshineBleController
+    private var controlService: MagicshineControlService? = null
     private lateinit var batteryView: TextView
     private lateinit var temperatureView: TextView
     private lateinit var changeLampButton: View
@@ -67,11 +73,58 @@ class MainActivity : AppCompatActivity() {
     private var currentSelectedLampAddress: String? = null
     private var currentSelectedLampName: String? = null
     private var lastRenderedCandidateSignature: String = ""
+    private val serviceListener = object : MagicshineControlService.Listener {
+        override fun onStatus(status: String) {
+            runOnUiThread {
+                currentDisplayStatus = displayStatus(status)
+                updateConnectButton()
+            }
+        }
+
+        override fun onConnectionStatus(status: String) {
+            runOnUiThread {
+                currentConnectionStatus = status
+                updateConnectButton()
+            }
+        }
+
+        override fun onBatteryStatus(status: String) {
+            runOnUiThread {
+                currentBatteryStatus = status
+                batteryView.text = status
+                updateConnectButton()
+            }
+        }
+
+        override fun onTemperatureStatus(status: String) {
+            runOnUiThread {
+                currentTemperatureStatus = status
+                temperatureView.text = status
+            }
+        }
+    }
+
+    private val serviceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+            val service = (binder as? MagicshineControlService.LocalBinder)?.getService() ?: return
+            controlService = service
+            service.registerListener(serviceListener)
+            restoreSelectedLamp()
+            if (hasPermissions()) {
+                service.startDiscovery()
+            }
+            refreshUiFromController()
+        }
+
+        override fun onServiceDisconnected(name: ComponentName?) {
+            controlService = null
+        }
+    }
 
     private val permissionLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
         if (result.values.all { it }) {
             restoreSelectedLamp()
-            controller.startDiscovery()
+            controlService?.startDiscovery()
         } else {
             currentDisplayStatus = "permissions"
             updateConnectButton()
@@ -107,38 +160,12 @@ class MainActivity : AppCompatActivity() {
         sosButton = findViewById(R.id.btnSos)
         blitzButton = findViewById(R.id.btnBlitz)
         disconnectButton = findViewById(R.id.btnDisconnect)
-        controller = MagicshineBleController.getShared(
-            this,
-            onStatus = { s ->
-                runOnUiThread {
-                    currentDisplayStatus = displayStatus(s)
-                    updateConnectButton()
-                }
-            },
-            onConnectionStatus = { s ->
-                runOnUiThread {
-                    currentConnectionStatus = s
-                    updateConnectButton()
-                }
-            },
-            onBatteryStatus = { s ->
-                runOnUiThread {
-                    currentBatteryStatus = s
-                    batteryView.text = s
-                    updateConnectButton()
-                }
-            },
-            onTemperatureStatus = { s ->
-                runOnUiThread {
-                    currentTemperatureStatus = s
-                    temperatureView.text = s
-                }
-            },
+        bindService(
+            Intent(this, MagicshineControlService::class.java),
+            serviceConnection,
+            Context.BIND_AUTO_CREATE or Context.BIND_IMPORTANT,
         )
-        restoreSelectedLamp()
-        if (hasPermissions()) {
-            controller.startDiscovery()
-        } else {
+        if (!hasPermissions()) {
             ensurePermissions()
         }
         lifecycleScope.launch {
@@ -152,33 +179,36 @@ class MainActivity : AppCompatActivity() {
             connectIfPermitted()
         }
         changeLampButton.setOnClickListener {
-            controller.stopRepeatingCommand()
-            controller.disconnect()
+            controlService?.stopRepeatingCommand()
+            controlService?.disconnect()
             saveSelectedLamp(null)
-            controller.setPreferredAddress(null)
-            controller.startDiscovery(forceRestart = true)
+            controlService?.setPreferredAddress(null)
+            controlService?.startDiscovery(forceRestart = true)
             refreshLampSelectionUi()
         }
         module1Button.setOnClickListener {
-            controller.stopRepeatingCommand()
+            controlService?.stopRepeatingCommand()
             selectedOutputTarget = OutputTarget.LOW
             selectedModule = MagicshineModule.MODULE_1
+            syncSharedStateForCurrentSelection()
             updateOutputControls()
             updateBrightnessControls()
             resendSelectedLevelForCurrentModule()
         }
         module2Button.setOnClickListener {
-            controller.stopRepeatingCommand()
+            controlService?.stopRepeatingCommand()
             selectedOutputTarget = OutputTarget.HIGH
             selectedModule = MagicshineModule.MODULE_2
+            syncSharedStateForCurrentSelection()
             updateOutputControls()
             updateBrightnessControls()
             resendSelectedLevelForCurrentModule()
         }
         offButton.setOnClickListener {
-            controller.stopRepeatingCommand()
+            controlService?.stopRepeatingCommand()
             selectedOutputTarget = OutputTarget.OFF
             selectedLevelPercent = null
+            SharedLightState.set(this, SharedLightState.OutputTarget.OFF, null)
             updateOutputControls()
             updateBrightnessControls()
             sendIfPermitted(MagicshineProtocol.buildPresetFrame(MagicshineModule.MODULE_1, 0))
@@ -199,14 +229,32 @@ class MainActivity : AppCompatActivity() {
             startModeLoop(MagicshineMode.BLITZ)
         }
         disconnectButton.setOnClickListener {
-            controller.stopRepeatingCommand()
-            controller.disconnect()
+            controlService?.stopRepeatingCommand()
+            controlService?.disconnect()
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        AppUiState.setActive(this, true)
+        applySharedLightState()
+        updateOutputControls()
+        updateBrightnessControls()
+    }
+
+    override fun onPause() {
+        AppUiState.setActive(this, false)
+        super.onPause()
     }
 
     override fun onDestroy() {
         if (isFinishing) {
-            controller.clearUiCallbacks()
+            AppUiState.setActive(this, false)
+        }
+        controlService?.unregisterListener(serviceListener)
+        runCatching { unbindService(serviceConnection) }
+        if (isFinishing) {
+            controlService = null
         }
         super.onDestroy()
     }
@@ -221,7 +269,7 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Select a lamp first", Toast.LENGTH_SHORT).show()
             return
         }
-        controller.connect()
+        controlService?.connect()
     }
 
     private fun sendIfPermitted(frame: String) {
@@ -234,7 +282,7 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Select a lamp first", Toast.LENGTH_SHORT).show()
             return
         }
-        controller.send(frame)
+        controlService?.send(frame)
     }
 
     private fun requiredPermissions(): Array<String> {
@@ -242,7 +290,6 @@ class MainActivity : AppCompatActivity() {
             arrayOf(
                 Manifest.permission.BLUETOOTH_SCAN,
                 Manifest.permission.BLUETOOTH_CONNECT,
-                Manifest.permission.ACCESS_FINE_LOCATION,
             )
         } else {
             arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -259,10 +306,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun refreshUiFromController() {
         refreshLampSelectionUi()
-        val connectionStatus = controller.currentConnectionStatus()
-        val batteryStatus = controller.currentBatteryStatus()
-        val temperatureStatus = controller.currentTemperatureStatus()
-        val status = controller.currentStatus()
+        applySharedLightState()
+        val service = controlService ?: return
+        val connectionStatus = service.currentConnectionStatus()
+        val batteryStatus = service.currentBatteryStatus()
+        val temperatureStatus = service.currentTemperatureStatus()
+        val status = service.currentStatus()
 
         if (currentConnectionStatus != connectionStatus) {
             currentConnectionStatus = connectionStatus
@@ -276,10 +325,42 @@ class MainActivity : AppCompatActivity() {
             temperatureView.text = temperatureStatus
         }
         val displayStatus = displayStatus(status)
-        if (currentDisplayStatus != displayStatus) {
-            currentDisplayStatus = displayStatus
+        val effectiveDisplayStatus = when {
+            connectionStatus == "connected" -> "connected"
+            connectionStatus == "connecting" -> "connecting"
+            currentSelectedLampAddress != null &&
+                displayStatus in setOf("idle", "searching", "disconnected") -> "found"
+            else -> displayStatus
+        }
+        if (currentDisplayStatus != effectiveDisplayStatus) {
+            currentDisplayStatus = effectiveDisplayStatus
         }
         updateConnectButton()
+        updateOutputControls()
+        updateBrightnessControls()
+    }
+
+    private fun applySharedLightState() {
+        val snapshot = SharedLightState.get(this)
+        selectedOutputTarget = when (snapshot.outputTarget) {
+            SharedLightState.OutputTarget.LOW -> {
+                selectedModule = MagicshineModule.MODULE_1
+                OutputTarget.LOW
+            }
+            SharedLightState.OutputTarget.HIGH -> {
+                selectedModule = MagicshineModule.MODULE_2
+                OutputTarget.HIGH
+            }
+            SharedLightState.OutputTarget.OFF -> {
+                selectedModule = if (snapshot.lastOnTarget == SharedLightState.OutputTarget.HIGH) {
+                    MagicshineModule.MODULE_2
+                } else {
+                    MagicshineModule.MODULE_1
+                }
+                OutputTarget.OFF
+            }
+        }
+        selectedLevelPercent = snapshot.levelPercent
     }
 
     private fun restoreSelectedLamp() {
@@ -287,7 +368,7 @@ class MainActivity : AppCompatActivity() {
         val savedName = prefs.getString(PREF_SELECTED_LAMP_NAME, null)
         currentSelectedLampAddress = savedAddress
         currentSelectedLampName = savedName
-        controller.setPreferredAddress(savedAddress)
+        controlService?.setPreferredAddress(savedAddress)
     }
 
     private fun saveSelectedLamp(address: String?, name: String? = null) {
@@ -300,10 +381,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun refreshLampSelectionUi() {
-        val selectedLamp = controller.currentSelectedLamp()
-        val candidates = controller.currentLampCandidates()
-        val unsupportedCandidates = controller.currentUnsupportedLampCandidates()
-        val preferredAddress = controller.currentPreferredAddress()
+        val service = controlService
+        val selectedLamp = service?.currentSelectedLamp()
+        val candidates = service?.currentLampCandidates() ?: emptyList()
+        val preferredAddress = service?.currentPreferredAddress() ?: currentSelectedLampAddress
         currentSelectedLampAddress = preferredAddress
         if (selectedLamp != null && currentSelectedLampName != selectedLamp.name) {
             currentSelectedLampName = selectedLamp.name
@@ -317,20 +398,12 @@ class MainActivity : AppCompatActivity() {
         changeLampLabel.text = selectedLamp?.name ?: currentSelectedLampName ?: "Switch lamp"
 
         chooserHintView.text = if (candidates.isEmpty()) {
-            if (unsupportedCandidates.isEmpty()) {
-                "Searching for supported lamps"
-            } else {
-                "Select a supported lamp or allow another M2-B0 model"
-            }
+            "Searching for M2-B0 / M1-B0 lamps"
         } else {
             "Tap to select"
         }
 
-        val signature = buildString {
-            append(candidates.joinToString("|") { "${it.address}:${it.name}" })
-            append("::")
-            append(unsupportedCandidates.joinToString("|") { "${it.address}:${it.name}" })
-        }
+        val signature = candidates.joinToString("|") { "${it.address}:${it.name}" }
         if (signature == lastRenderedCandidateSignature) return
         lastRenderedCandidateSignature = signature
 
@@ -345,50 +418,12 @@ class MainActivity : AppCompatActivity() {
                 textSize = 11f
                 setOnClickListener {
                     saveSelectedLamp(candidate.address, candidate.name)
-                    controller.setPreferredAddress(candidate.address)
-                    controller.startDiscovery(forceRestart = true)
+                    controlService?.setPreferredAddress(candidate.address)
+                    controlService?.startDiscovery(forceRestart = true)
                     refreshLampSelectionUi()
                 }
             }
             lampCandidatesLayout.addView(button)
-        }
-
-        if (unsupportedCandidates.isNotEmpty()) {
-            val title = TextView(this).apply {
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                ).also { it.topMargin = dpToPx(8) }
-                text = "Other M2-B0 models"
-                textSize = 11f
-            }
-            lampCandidatesLayout.addView(title)
-
-            unsupportedCandidates
-                .distinctBy { it.name.lowercase() }
-                .forEach { candidate ->
-                    val button = Button(this).apply {
-                        layoutParams = LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.MATCH_PARENT,
-                            dpToPx(44),
-                        ).also { it.topMargin = dpToPx(4) }
-                        text = "Allow ${candidate.name}"
-                        textSize = 11f
-                        setOnClickListener {
-                            controller.approveDeviceName(candidate.name)
-                            val approvedCandidate = controller.currentLampCandidates()
-                                .firstOrNull { it.name.equals(candidate.name, ignoreCase = true) }
-                            if (approvedCandidate != null) {
-                                saveSelectedLamp(approvedCandidate.address, approvedCandidate.name)
-                                controller.setPreferredAddress(approvedCandidate.address)
-                            } else {
-                                controller.startDiscovery(forceRestart = true)
-                            }
-                            refreshLampSelectionUi()
-                        }
-                    }
-                    lampCandidatesLayout.addView(button)
-                }
         }
     }
 
@@ -424,7 +459,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun sendLevel(percent: Int) {
-        controller.stopRepeatingCommand()
+        controlService?.stopRepeatingCommand()
         if (selectedOutputTarget == OutputTarget.OFF) {
             selectedOutputTarget = if (selectedModule == MagicshineModule.MODULE_2) {
                 OutputTarget.HIGH
@@ -433,14 +468,23 @@ class MainActivity : AppCompatActivity() {
             }
         }
         selectedLevelPercent = percent
+        SharedLightState.set(
+            this,
+            if (selectedModule == MagicshineModule.MODULE_2) {
+                SharedLightState.OutputTarget.HIGH
+            } else {
+                SharedLightState.OutputTarget.LOW
+            },
+            percent,
+        )
         updateOutputControls()
         updateBrightnessControls()
         sendIfPermitted(MagicshineProtocol.buildPresetFrame(selectedModule, percent))
     }
 
     private fun startModeLoop(mode: MagicshineMode) {
-        controller.stopRepeatingCommand()
-        selectedLevelPercent = null
+        controlService?.stopRepeatingCommand()
+        val preservedLevel = selectedLevelPercent ?: SharedLightState.get(this).lastOnLevelPercent ?: 100
         if (selectedOutputTarget == OutputTarget.OFF) {
             selectedOutputTarget = if (selectedModule == MagicshineModule.MODULE_2) {
                 OutputTarget.HIGH
@@ -448,17 +492,47 @@ class MainActivity : AppCompatActivity() {
                 OutputTarget.LOW
             }
         }
+        selectedLevelPercent = preservedLevel
+        SharedLightState.set(
+            this,
+            if (selectedModule == MagicshineModule.MODULE_2) {
+                SharedLightState.OutputTarget.HIGH
+            } else {
+                SharedLightState.OutputTarget.LOW
+            },
+            preservedLevel,
+        )
         updateOutputControls()
         updateBrightnessControls()
         val module = selectedModule
         val frame = MagicshineProtocol.buildModeFrame(module, mode)
         sendIfPermitted(frame)
-        controller.startRepeatingCommand(frame, 1500L)
+        controlService?.startRepeatingCommand(frame, 1500L)
     }
 
     private fun resendSelectedLevelForCurrentModule() {
         val percent = selectedLevelPercent ?: return
+        syncSharedStateForCurrentSelection()
         sendIfPermitted(MagicshineProtocol.buildPresetFrame(selectedModule, percent))
+    }
+
+    private fun syncSharedStateForCurrentSelection() {
+        when (selectedOutputTarget) {
+            OutputTarget.OFF -> SharedLightState.set(this, SharedLightState.OutputTarget.OFF, null)
+            OutputTarget.LOW,
+            OutputTarget.HIGH -> {
+                val percent = selectedLevelPercent ?: return
+                SharedLightState.set(
+                    this,
+                    if (selectedModule == MagicshineModule.MODULE_2) {
+                        SharedLightState.OutputTarget.HIGH
+                    } else {
+                        SharedLightState.OutputTarget.LOW
+                    },
+                    percent,
+                )
+            }
+        }
     }
 
     private fun updateOutputControls() {

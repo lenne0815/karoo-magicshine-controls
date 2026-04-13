@@ -42,39 +42,14 @@ class MagicshineBleController(
 ) {
     companion object {
         private const val TAG = "MagicshineBle"
-        val SUPPORTED_DEVICE_NAMES = setOf(
-            "M2-B0 EVO_1700",
-            "M2-B0 EVO1300",
-            "M2-B0 EVO_1300",
+        val SUPPORTED_NAME_PREFIXES = setOf(
+            "M2-B0",
+            "M2-BO",
+            "M1-B0",
+            "M1-BO",
         )
         private const val PREFS_NAME = "magicshine_prefs"
         private const val PREF_SELECTED_LAMP_ADDRESS = "selected_lamp_address"
-        private const val PREF_ALLOWED_DEVICE_NAMES = "allowed_device_names"
-        @Volatile private var shared: MagicshineBleController? = null
-        fun getShared(
-            context: Context,
-            onStatus: ((String) -> Unit)? = null,
-            onConnectionStatus: ((String) -> Unit)? = null,
-            onBatteryStatus: ((String) -> Unit)? = null,
-            onTemperatureStatus: ((String) -> Unit)? = null,
-        ): MagicshineBleController {
-            shared?.let {
-                if (onStatus != null) it.onStatus = onStatus
-                if (onConnectionStatus != null) it.onConnectionStatus = onConnectionStatus
-                if (onBatteryStatus != null) it.onBatteryStatus = onBatteryStatus
-                if (onTemperatureStatus != null) it.onTemperatureStatus = onTemperatureStatus
-                return it
-            }
-            return synchronized(this) {
-                shared ?: MagicshineBleController(
-                    context.applicationContext,
-                    onStatus ?: {},
-                    onConnectionStatus ?: {},
-                    onBatteryStatus ?: {},
-                    onTemperatureStatus ?: {},
-                ).also { shared = it }
-            }
-        }
     }
 
     private val appContext = context.applicationContext
@@ -104,16 +79,15 @@ class MagicshineBleController(
     @Volatile private var notificationJob: Job? = null
     @Volatile private var repeatingCommandJob: Job? = null
     @Volatile private var connectJob: Job? = null
+    @Volatile private var telemetryBootstrapJob: Job? = null
     @Volatile private var observingAddress: String? = null
     private val operationMutex = Mutex()
     private val candidateLock = Any()
     private val knownCandidates = LinkedHashMap<String, LampCandidate>()
-    private val unsupportedCandidates = LinkedHashMap<String, LampCandidate>()
     private val knownPeripherals = LinkedHashMap<String, Peripheral>()
-    @Volatile private var allowedDeviceNames: Set<String> =
-        (prefs.getStringSet(PREF_ALLOWED_DEVICE_NAMES, emptySet()) ?: emptySet()).toSet()
 
     fun startDiscovery(forceRestart: Boolean = false) {
+        clearStalePublishedConnectionState()
         if (!forceRestart && lastPeripheral?.state?.value is ConnectionState.Connected) {
             return
         }
@@ -126,7 +100,6 @@ class MagicshineBleController(
             lastSeenTag = "none"
             synchronized(candidateLock) {
                 knownCandidates.clear()
-                unsupportedCandidates.clear()
                 knownPeripherals.clear()
             }
         } else if (discoveryJob?.isActive == true) {
@@ -151,32 +124,24 @@ class MagicshineBleController(
                         seenCount += 1
                         lastSeenTag = tag
 
-                        val matchedName = supportedDeviceNames().firstOrNull { supported ->
-                            name.equals(supported, ignoreCase = true)
-                        }
-                        val looksLikeSupportedFamily = name.startsWith("M2-B0", ignoreCase = true)
-
-                        if (matchedName != null) {
-                            val candidate = LampCandidate(address = p.address, name = matchedName)
+                        if (matchesSupportedFamily(name)) {
+                            val candidate = LampCandidate(address = p.address, name = name)
                             val preferred = preferredAddress
                             synchronized(candidateLock) {
                                 knownCandidates[p.address] = candidate
-                                unsupportedCandidates.remove(p.address)
                                 knownPeripherals[p.address] = p
                             }
                             if (preferred != null && preferred == p.address) {
                                 val isNewTarget = lastPeripheral?.address != p.address
                                 lastPeripheral = p
                                 lastTargetSeenAtMs = System.currentTimeMillis()
-                                if (isNewTarget) {
+                                val shouldPublishFound =
+                                    isNewTarget ||
+                                        lastPublishedStatus == null ||
+                                        lastPublishedStatus in setOf("searching", "disconnected", "idle")
+                                if (shouldPublishFound) {
                                     publishStatus("found")
                                 }
-                            }
-                        } else if (looksLikeSupportedFamily) {
-                            val candidate = LampCandidate(address = p.address, name = name)
-                            synchronized(candidateLock) {
-                                unsupportedCandidates[p.address] = candidate
-                                knownPeripherals[p.address] = p
                             }
                         }
                     }
@@ -215,27 +180,15 @@ class MagicshineBleController(
         knownCandidates.values.toList()
     }
 
-    fun currentUnsupportedLampCandidates(): List<LampCandidate> = synchronized(candidateLock) {
-        unsupportedCandidates.values.toList()
-    }
-
-    fun approveDeviceName(name: String) {
-        val updated = (allowedDeviceNames + name).toSortedSet(String.CASE_INSENSITIVE_ORDER)
-        allowedDeviceNames = updated
-        prefs.edit().putStringSet(PREF_ALLOWED_DEVICE_NAMES, updated).apply()
-        synchronized(candidateLock) {
-            val promoted = unsupportedCandidates.values.filter { it.name.equals(name, ignoreCase = true) }
-            promoted.forEach { candidate ->
-                knownCandidates[candidate.address] = candidate
-                unsupportedCandidates.remove(candidate.address)
-            }
-        }
-    }
-
     fun currentSelectedLamp(): LampCandidate? {
         val selected = preferredAddress ?: return null
         return synchronized(candidateLock) { knownCandidates[selected] }
             ?: lastPeripheral?.let { LampCandidate(it.address, it.name ?: "Magicshine") }
+    }
+
+    private fun preferredPeripheral(): Peripheral? {
+        val selected = preferredAddress ?: return null
+        return synchronized(candidateLock) { knownPeripherals[selected] } ?: lastPeripheral?.takeIf { it.address == selected }
     }
 
     fun connect() {
@@ -247,16 +200,19 @@ class MagicshineBleController(
                     publishStatus("searching")
                     return@withLock
                 }
-                startDiscovery()
                 publishConnectionStatus("connecting")
-                val now = System.currentTimeMillis()
-                val cached = lastPeripheral
+                val cached = preferredPeripheral().also { if (it != null) lastPeripheral = it }
                 val isConnected = cached?.state?.value is ConnectionState.Connected
-                if (!isConnected && (cached == null || now - lastTargetSeenAtMs > 5_000)) {
+                if (!isConnected && cached == null) {
+                    startDiscovery()
                     startDiscovery(forceRestart = true)
                 }
 
                 val target = awaitTarget() ?: run {
+                    Log.d(
+                        TAG,
+                        "awaitTarget timeout preferred=$preferredAddress seenCount=$seenCount lastSeenTag=$lastSeenTag",
+                    )
                     publishConnectionStatus("no device")
                     return@withLock
                 }
@@ -264,8 +220,8 @@ class MagicshineBleController(
                 try {
                     publishStatus("found")
                     ensureConnected(target)
-                    requestTelemetry(target)
                     publishStatus("connected")
+                    scheduleTelemetryBootstrap(target)
                 } catch (t: Throwable) {
                     cleanupAfterConnectionFailure(target)
                     publishStatus("ble error: ${t::class.java.simpleName}")
@@ -313,14 +269,13 @@ class MagicshineBleController(
                 stopRepeatingCommand()
                 val target = lastPeripheral
                 if (target == null) {
-                    publishStatus("no target to disconnect")
                     publishConnectionStatus("disconnected")
+                    clearActiveConnectionState(clearCachedPeripheral = true)
                     resetTelemetryStatus()
                     return@withLock
                 }
 
                 if (target.state.value !is ConnectionState.Connected) {
-                    publishStatus("already disconnected")
                     publishConnectionStatus("disconnected")
                     clearActiveConnectionState(clearCachedPeripheral = true)
                     resetTelemetryStatus()
@@ -375,7 +330,7 @@ class MagicshineBleController(
         }
         waitForTargetCharacteristic(peripheral)
         ensureNotificationObservation(peripheral)
-        waitUntil(timeoutMs = 60, stepMs = 10) {
+        waitUntil(timeoutMs = 40, stepMs = 8) {
             notificationJob?.isActive == true && findTargetCharacteristic(peripheral) != null
         }
     }
@@ -390,10 +345,8 @@ class MagicshineBleController(
                 lastPeripheral = null
             }
             clearActiveConnectionState(clearCachedPeripheral = false)
-            synchronized(candidateLock) {
-                knownPeripherals.remove(peripheral.address)
-            }
-            startDiscovery(forceRestart = true)
+            stopDiscovery()
+            publishConnectionStatus("disconnected")
         }
     }
 
@@ -423,19 +376,36 @@ class MagicshineBleController(
         )
     }
 
+    private fun scheduleTelemetryBootstrap(peripheral: Peripheral) {
+        telemetryBootstrapJob?.cancel()
+        telemetryBootstrapJob = scope.launch {
+            delay(180)
+            operationMutex.withLock {
+                if (peripheral.state.value !is ConnectionState.Connected) return@withLock
+                if (lastPeripheral?.address != peripheral.address) return@withLock
+                runCatching { requestTelemetry(peripheral) }
+            }
+        }.also { job ->
+            job.invokeOnCompletion {
+                if (telemetryBootstrapJob === job) telemetryBootstrapJob = null
+            }
+        }
+    }
+
     private suspend fun awaitTarget(): Peripheral? {
-        var p = lastPeripheral
+        var p = preferredPeripheral().also { if (it != null) lastPeripheral = it } ?: lastPeripheral
         if (p?.state?.value is ConnectionState.Connected) return p
         if (p == null) {
             publishStatus("searching")
-            for (i in 0 until 50) {
-                delay(50)
-                p = lastPeripheral
+            startDiscovery()
+            for (i in 0 until 48) {
+                delay(25)
+                p = preferredPeripheral().also { if (it != null) lastPeripheral = it } ?: lastPeripheral
                 if (p?.state?.value is ConnectionState.Connected || p != null) break
-                if (i == 19 && seenCount == 0) {
+                if ((i == 11 || i == 23) && seenCount == 0) {
                     startDiscovery(forceRestart = true)
                 }
-                if (i % 10 == 9) {
+                if (i % 12 == 11) {
                     publishStatus("searching")
                 }
             }
@@ -449,9 +419,7 @@ class MagicshineBleController(
             return
         }
 
-        publishStatus("writing")
         characteristic.write(frameHex.hexToBytes(), WriteType.WITH_RESPONSE)
-        publishStatus("write ok")
     }
 
     private suspend fun writeFrameWithRetry(
@@ -463,9 +431,7 @@ class MagicshineBleController(
         repeat(attempts) { attempt ->
             val characteristic = findTargetCharacteristic(peripheral)
             if (characteristic != null) {
-                publishStatus("writing")
                 characteristic.write(frameHex.hexToBytes(), WriteType.WITH_RESPONSE)
-                publishStatus("write ok")
                 return true
             }
             if (attempt < attempts - 1) {
@@ -515,10 +481,10 @@ class MagicshineBleController(
     }
 
     private suspend fun waitForTargetCharacteristic(peripheral: Peripheral): RemoteCharacteristic? {
-        repeat(10) {
+        repeat(8) {
             val characteristic = findTargetCharacteristic(peripheral)
             if (characteristic != null) return characteristic
-            delay(60)
+            delay(40)
         }
         return null
     }
@@ -530,7 +496,8 @@ class MagicshineBleController(
         MagicshineProtocol.parseTemperatureCelsius(frameHex)?.let { publishTemperatureStatus("${it}C") }
     }
 
-    private fun supportedDeviceNames(): Set<String> = SUPPORTED_DEVICE_NAMES + allowedDeviceNames
+    private fun matchesSupportedFamily(name: String): Boolean =
+        SUPPORTED_NAME_PREFIXES.any { prefix -> name.startsWith(prefix, ignoreCase = true) }
 
     private suspend fun waitUntil(
         timeoutMs: Long,
@@ -558,7 +525,6 @@ class MagicshineBleController(
             arrayOf(
                 Manifest.permission.BLUETOOTH_SCAN,
                 Manifest.permission.BLUETOOTH_CONNECT,
-                Manifest.permission.ACCESS_FINE_LOCATION,
             )
         } else {
             arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -596,9 +562,7 @@ class MagicshineBleController(
             || message.startsWith("no device") -> "disconnected"
         message.startsWith("connecting") -> "connecting"
         message.startsWith("connected")
-            || message.startsWith("sync telemetry")
-            || message.startsWith("writing")
-            || message.startsWith("write ok") -> "connected"
+            || message.startsWith("sync telemetry") -> "connected"
         message.startsWith("disconnect")
             || message.startsWith("already disconnected") -> "disconnected"
         message.startsWith("missing bluetooth permissions") -> "permissions"
@@ -636,11 +600,17 @@ class MagicshineBleController(
 
     fun currentTemperatureStatus(): String = lastPublishedTemperatureStatus ?: "?"
 
-    fun clearUiCallbacks() {
-        onStatus = {}
-        onConnectionStatus = {}
-        onBatteryStatus = {}
-        onTemperatureStatus = {}
+    fun hasLiveConnection(): Boolean {
+        val peripheral = preferredPeripheral() ?: lastPeripheral
+        return peripheral?.state?.value is ConnectionState.Connected
+    }
+
+    fun hasConnectInFlight(): Boolean = connectJob?.isActive == true
+
+    fun clearStalePublishedConnectionState() {
+        if (!hasConnectInFlight() && !hasLiveConnection() && lastPublishedConnectionStatus != "disconnected") {
+            publishConnectionStatus("disconnected")
+        }
     }
 
     private fun cancelActiveJobs() {
@@ -648,6 +618,8 @@ class MagicshineBleController(
         notificationJob = null
         repeatingCommandJob?.cancel()
         repeatingCommandJob = null
+        telemetryBootstrapJob?.cancel()
+        telemetryBootstrapJob = null
         connectJob = null
     }
 
@@ -671,11 +643,10 @@ class MagicshineBleController(
             publishStatus("searching")
             return
         }
-        startDiscovery()
-        val now = System.currentTimeMillis()
-        val cached = lastPeripheral
+        val cached = preferredPeripheral().also { if (it != null) lastPeripheral = it } ?: lastPeripheral
         val isConnected = cached?.state?.value is ConnectionState.Connected
-        if (!isConnected && (cached == null || now - lastTargetSeenAtMs > 5_000)) {
+        if (!isConnected && cached == null) {
+            startDiscovery()
             startDiscovery(forceRestart = true)
         }
 

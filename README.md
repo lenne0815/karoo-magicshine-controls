@@ -4,40 +4,42 @@ Karoo app and Karoo extension for controlling a Magicshine light over BLE.
 
 ![Karoo Magicshine Controls UI](docs/images/karoo-ui.png)
 
-## Beta 1.1
+## About
 
-This release expands the tested light family while keeping the same Karoo-first control flow.
+Magicshine Controls is a Karoo app plus ride-field extension for controlling supported Magicshine lights over BLE.
 
-- stable BLE discovery and lamp selection gate
-- built-in support for additional known EVO name variants
-- local approval flow for other nearby `M2-B0...` models
-- reliable connect and disconnect flow
-- `LOW`, `HIGH`, and `OFF` output controls
-- fixed brightness presets: `25`, `50`, `75`, `100`
-- repeating `SOS` and `FLASH`
-- battery and temperature telemetry in the Karoo UI
+- Karoo-native control screen with telemetry
+- in-ride split field for quick light toggle or app launch
+- selection gate for supported lamp families
 
-## Supported Light
+## Release Notes
 
-The current implementation is currently tested against:
+### Beta 1.2
 
-- `M2-B0 EVO_1700`
-- `M2-B0 EVO1300`
-- `M2-B0 EVO_1300`
+- expanded selector gate support for `M2-B0`, `M2-BO`, `M1-B0`, and `M1-BO` BLE name families
+- improved cold-boot ride auto-connect so the light can connect from the ride side without opening the app first
+- added the split in-ride field workflow: left side controls the lamp, right side opens the app
+- tightened app and ride state syncing so `LOW`/`HIGH` and the remembered last state stay aligned
+- refreshed launcher branding with the new flashlight icon
 
-Discovery uses an allowlist for known supported names and the app lets you choose the exact lamp when multiple matching devices are nearby.
-If another `M2-B0...` model shows up in the chooser, you can approve it locally on the Karoo without changing the app build.
+## Supported Light Families
+
+The current selector gate looks for BLE names starting with:
+
+- `M2-B0`
+- `M2-BO`
+- `M1-B0`
+- `M1-BO`
 
 ## Karoo Flow
 
 1. Open the app on the Karoo.
 2. Choose the lamp once in the selection gate.
-3. If your model is shown as another `M2-B0...` variant, approve it locally in the gate first.
-4. Press `CONNECT`.
-5. Wait for the short connect blink.
-6. Choose `LOW`, `HIGH`, or `OFF`.
-7. Use `25`, `50`, `75`, `100`, `SOS`, or `FLASH`.
-8. Press `DISCONNECT` when finished.
+3. Press `CONNECT`.
+4. Wait for the short connect blink.
+5. Choose `LOW`, `HIGH`, or `OFF`.
+6. Use `25`, `50`, `75`, `100`, `SOS`, or `FLASH`.
+7. Press `DISCONNECT` when finished.
 
 ## Current Caveats
 

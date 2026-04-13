@@ -60,7 +60,7 @@
                 android:id="@+id/txtChooserTitle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Found lamps"
+                android:text="Select lamp"
                 android:textSize="12sp" />
 
             <TextView
@@ -68,7 +68,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
-                android:text="Searching for M2-B0 EVO_1700"
+                android:text="Searching for M2-B0 / M1-B0 lamps"
                 android:textSize="10sp" />
 
             <LinearLayout

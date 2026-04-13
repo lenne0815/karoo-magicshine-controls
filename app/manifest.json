@@ -1,0 +1,17 @@
+{
+  "label": "Magicshine Controls",
+  "packageName": "com.lenne0815.karoomagicshine",
+  "iconUrl": "https://raw.githubusercontent.com/lenne0815/karoo-magicshine-controls/main/docs/images/icon.png",
+  "latestApkUrl": "https://github.com/lenne0815/karoo-magicshine-controls/releases/latest/download/karoo-magicshine-controls-beta-1.2.apk",
+  "latestVersion": "Beta 1.2",
+  "latestVersionCode": 21,
+  "developer": "Lennart Thomsen",
+  "description": "Control supported Magicshine lights from the Karoo app or the in-ride field, with lamp selection, quick beam switching, and battery and temperature telemetry.",
+  "releaseNotes": [
+    "Expanded the selector gate to BLE names starting with M2-B0, M2-BO, M1-B0, and M1-BO.",
+    "Improved cold-boot ride auto-connect so the light can reconnect from the ride side without opening the app first.",
+    "Added the split in-ride field with direct light control on the left and app launch on the right.",
+    "Improved shared app and ride state syncing for LOW/HIGH and the remembered last light state.",
+    "Refreshed the launcher branding with the new flashlight icon."
+  ]
+}

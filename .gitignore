@@ -1,3 +1,4 @@
 .artifacts/
 .gradle/
 app/build/
+LOCAL_SESSION_NOTES.md

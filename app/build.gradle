@@ -1,18 +1,23 @@
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
+    id 'org.jetbrains.kotlin.plugin.compose'
 }
 
 android {
     namespace 'com.lenne0815.karoomagicshine'
     compileSdk 35
 
+    buildFeatures {
+        compose true
+    }
+
     defaultConfig {
         applicationId "com.lenne0815.karoomagicshine"
         minSdk 26
         targetSdk 34
-        versionCode 19
-        versionName "1.9"
+        versionCode 21
+        versionName "Beta 1.2"
     }
 
     buildTypes {
@@ -35,6 +40,11 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'com.google.android.material:material:1.12.0'
     implementation 'androidx.cardview:cardview:1.0.0'
+    implementation platform('androidx.compose:compose-bom:2024.09.02')
+    implementation 'androidx.compose.runtime:runtime'
+    implementation 'androidx.compose.ui:ui-graphics'
+    implementation 'androidx.compose.ui:ui-unit'
+    implementation 'androidx.glance:glance-appwidget:1.1.1'
 
     implementation("io.hammerhead:karoo-ext:1.1.8")
 
