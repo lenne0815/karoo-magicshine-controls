@@ -1,11 +1,11 @@
 {
   "label": "Magicshine Controls",
   "packageName": "com.lenne0815.karoomagicshine",
-  "iconUrl": "https://github.com/lenne0815/karoo-magicshine-controls/releases/download/beta-1.2.1/icon.png",
-  "latestApkUrl": "https://github.com/lenne0815/karoo-magicshine-controls/releases/download/beta-1.2.1/karoo-magicshine-controls-beta-1.2.1.apk",
-  "latestVersion": "Beta 1.2.1",
-  "latestVersionCode": 22,
+  "iconUrl": "https://github.com/lenne0815/karoo-magicshine-controls/releases/download/beta-1.3/icon.png",
+  "latestApkUrl": "https://github.com/lenne0815/karoo-magicshine-controls/releases/download/beta-1.3/karoo-magicshine-controls-beta-1.3.apk",
+  "latestVersion": "Beta 1.3",
+  "latestVersionCode": 23,
   "developer": "Lennart Thomsen",
   "description": "Control supported Magicshine lights from the Karoo app or the in-ride field, with lamp selection, quick beam switching, and battery and temperature telemetry.",
-  "releaseNotes": "* Hardened ride reconnect after Bluetooth dropouts\n* Reduced BLE scan churn in the ride extension\n* Improved app and ride button state sync\n* Improved disconnected and no-lamp field states"
+  "releaseNotes": "* Reduced BLE scanning and retry churn when the lamp is not nearby\n* Added fresh no-lamp retry from the ride button\n* Added fresh no-lamp retry from the app connect button\n* Improved ride disconnect and field state handling"
 }

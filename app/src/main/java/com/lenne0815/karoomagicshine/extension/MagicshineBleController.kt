@@ -16,6 +16,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import no.nordicsemi.kotlin.ble.client.android.CentralManager
@@ -43,6 +44,7 @@ class MagicshineBleController(
 ) {
     companion object {
         private const val TAG = "MagicshineBle"
+        private const val DISCOVERY_SESSION_TIMEOUT_MS = 12_000L
         val SUPPORTED_NAME_PREFIXES = setOf(
             "M2-B0",
             "M2-BO",
@@ -122,38 +124,47 @@ class MagicshineBleController(
             lastSeenTag = "none"
             publishStatus("searching")
             try {
-                centralManager
-                    .scan { Any { } }
-                    .collect { result ->
-                        val p = result.peripheral
-                        val name = p.name ?: "<unnamed>"
-                        val tag = "$name/${p.address}"
-                        seenCount += 1
-                        lastSeenTag = tag
+                val timedOut = withTimeoutOrNull(DISCOVERY_SESSION_TIMEOUT_MS) {
+                    centralManager
+                        .scan { Any { } }
+                        .collect { result ->
+                            val p = result.peripheral
+                            val name = p.name ?: "<unnamed>"
+                            val tag = "$name/${p.address}"
+                            seenCount += 1
+                            lastSeenTag = tag
 
-                        if (matchesSupportedFamily(name)) {
-                            val candidate = LampCandidate(address = p.address, name = name)
-                            val preferred = preferredAddress
-                            synchronized(candidateLock) {
-                                knownCandidates[p.address] = candidate
-                                knownPeripherals[p.address] = p
-                            }
-                            if (preferred != null && preferred == p.address) {
-                                val isNewTarget = lastPeripheral?.address != p.address
-                                lastPeripheral = p
-                                lastTargetSeenAtMs = System.currentTimeMillis()
-                                val shouldPublishFound =
-                                    isNewTarget ||
-                                        lastPublishedStatus == null ||
-                                        lastPublishedStatus in setOf("searching", "disconnected", "idle")
-                                if (shouldPublishFound) {
-                                    publishStatus("found")
+                            if (matchesSupportedFamily(name)) {
+                                val candidate = LampCandidate(address = p.address, name = name)
+                                val preferred = preferredAddress
+                                synchronized(candidateLock) {
+                                    knownCandidates[p.address] = candidate
+                                    knownPeripherals[p.address] = p
+                                }
+                                if (preferred != null && preferred == p.address) {
+                                    val isNewTarget = lastPeripheral?.address != p.address
+                                    lastPeripheral = p
+                                    lastTargetSeenAtMs = System.currentTimeMillis()
+                                    val shouldPublishFound =
+                                        isNewTarget ||
+                                            lastPublishedStatus == null ||
+                                            lastPublishedStatus in setOf("searching", "disconnected", "idle")
+                                    if (shouldPublishFound) {
+                                        publishStatus("found")
+                                    }
                                 }
                             }
                         }
-                    }
+                } == null
+                if (timedOut) {
+                    Log.d(TAG, "discovery session timed out seenCount=$seenCount lastSeenTag=$lastSeenTag")
+                }
             } catch (t: Throwable) {
                 publishStatus("discovery error: ${t::class.java.simpleName}")
+            } finally {
+                if (discoveryJob == kotlinx.coroutines.currentCoroutineContext()[Job]) {
+                    discoveryJob = null
+                }
             }
         }
     }
@@ -220,6 +231,7 @@ class MagicshineBleController(
                 }
 
                 val target = awaitTarget() ?: run {
+                    stopDiscovery()
                     if (!isBluetoothEnabled()) {
                         Log.d(TAG, "awaitTarget aborted: bluetooth unavailable preferred=$preferredAddress")
                         publishConnectionStatus("disconnected")
@@ -670,6 +682,7 @@ class MagicshineBleController(
 
         val target = awaitTarget()
         if (target == null) {
+            stopDiscovery()
             publishStatus("searching")
             publishConnectionStatus("no device")
             return

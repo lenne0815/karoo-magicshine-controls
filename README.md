@@ -22,6 +22,13 @@ Add the Magicshine field to a Karoo ride page to get a split in-ride control:
 
 ## Release Notes
 
+### Beta 1.3
+
+- reduced BLE scanning and retry churn when the lamp is not nearby
+- added fresh `NO LAMP` retry from the ride button
+- added fresh `CONNECT` retry from the app after a no-lamp miss
+- improved ride disconnect and field state handling
+
 ### Beta 1.2.1
 
 - hardened ride reconnect after Bluetooth dropouts

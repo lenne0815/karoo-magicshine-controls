@@ -269,7 +269,11 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Select a lamp first", Toast.LENGTH_SHORT).show()
             return
         }
-        controlService?.connect()
+        if (currentConnectionStatus == "no device") {
+            controlService?.retryDiscoveryAndConnectFromUi()
+        } else {
+            controlService?.connect()
+        }
     }
 
     private fun sendIfPermitted(frame: String) {

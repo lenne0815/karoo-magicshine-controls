@@ -37,7 +37,11 @@ class MagicshineControlService : Service() {
         private const val TAG = "MagicshineSvc"
         private const val CHANNEL_ID = "magicshine_background"
         private const val NOTIFICATION_ID = 4042
+        private const val EXTENSION_DISCOVERY_WAIT_MS = 8_000L
+        private const val EXTENSION_DISCOVERY_POLL_MS = 500L
+        private const val EXTENSION_RETRY_COOLDOWN_MS = 15_000L
         const val ACTION_TOGGLE_100 = "com.lenne0815.karoomagicshine.action.TOGGLE_100"
+        const val ACTION_RETRY_CONNECT = "com.lenne0815.karoomagicshine.action.RETRY_CONNECT"
         const val ACTION_FIELD_VISIBLE = "com.lenne0815.karoomagicshine.action.FIELD_VISIBLE"
         const val ACTION_FIELD_HIDDEN = "com.lenne0815.karoomagicshine.action.FIELD_HIDDEN"
     }
@@ -73,6 +77,7 @@ class MagicshineControlService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_TOGGLE_100 -> handleToggle100()
+            ACTION_RETRY_CONNECT -> retryDiscoveryAndConnect()
             ACTION_FIELD_VISIBLE -> markFieldVisible()
             ACTION_FIELD_HIDDEN -> markFieldHidden()
         }
@@ -146,6 +151,31 @@ class MagicshineControlService : Service() {
         pendingConnectJob = scope.launch {
             Log.d(TAG, "pending connect fired forceRestart=$forceRestart")
             delay(delayMs)
+            controller.connect()
+        }.also { job ->
+            job.invokeOnCompletion {
+                if (pendingConnectJob === job) pendingConnectJob = null
+            }
+        }
+    }
+
+    private fun retryDiscoveryAndConnect() {
+        cancelPendingWork()
+        if (!controller.isBluetoothEnabled()) {
+            Log.d(TAG, "retry connect aborted: bluetooth unavailable")
+            LightFieldState.set(this, LightFieldState.STATUS_DISCONNECTED)
+            return
+        }
+        if (controller.currentPreferredAddress() == null) {
+            Log.d(TAG, "retry connect aborted: no preferred lamp")
+            LightFieldState.set(this, LightFieldState.STATUS_NO_DEVICE)
+            return
+        }
+        Log.d(TAG, "retry connect: force restart discovery")
+        LightFieldState.set(this, LightFieldState.STATUS_SEARCHING)
+        controller.startDiscovery(forceRestart = true)
+        pendingConnectJob = scope.launch {
+            delay(300)
             controller.connect()
         }.also { job ->
             job.invokeOnCompletion {
@@ -238,6 +268,9 @@ class MagicshineControlService : Service() {
         cancelPendingWork()
         controller.connect()
     }
+    fun retryDiscoveryAndConnectFromUi() {
+        retryDiscoveryAndConnect()
+    }
     fun ensureConnectedFromExtension() {
         startForegroundForExtension("Searching for lamp")
         cancelImmediateWork()
@@ -257,7 +290,7 @@ class MagicshineControlService : Service() {
         LightFieldState.set(this, LightFieldState.STATUS_SEARCHING)
         controller.startDiscovery(forceRestart = false)
         pendingConnectJob = scope.launch {
-            repeat(24) {
+            repeat((EXTENSION_DISCOVERY_WAIT_MS / EXTENSION_DISCOVERY_POLL_MS).toInt()) {
                 if (AppUiState.isActive(this@MagicshineControlService)) return@launch
                 if (controller.hasLiveConnection() || controller.hasConnectInFlight()) return@launch
                 val selected = controller.currentSelectedLamp()
@@ -266,10 +299,12 @@ class MagicshineControlService : Service() {
                     controller.connect()
                     return@launch
                 }
-                delay(500)
+                delay(EXTENSION_DISCOVERY_POLL_MS)
             }
-            Log.d(TAG, "extension ensureConnected: timeout waiting for lamp, connecting anyway")
-            controller.connect()
+            Log.d(TAG, "extension ensureConnected: timeout waiting for lamp, stopping discovery")
+            controller.stopDiscovery()
+            LightFieldState.set(this@MagicshineControlService, LightFieldState.STATUS_NO_DEVICE)
+            stopForegroundIfHeld()
         }.also { job ->
             job.invokeOnCompletion {
                 if (pendingConnectJob === job) pendingConnectJob = null
@@ -277,8 +312,8 @@ class MagicshineControlService : Service() {
         }
         pendingExtensionRetryJob?.cancel()
         pendingExtensionRetryJob = scope.launch {
-            repeat(3) { attempt ->
-                delay(5000)
+            repeat(2) { attempt ->
+                delay(EXTENSION_RETRY_COOLDOWN_MS)
                 if (AppUiState.isActive(this@MagicshineControlService)) return@launch
                 if (controller.currentPreferredAddress() == null) return@launch
                 if (!controller.isBluetoothEnabled()) {

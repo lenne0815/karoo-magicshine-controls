@@ -12,9 +12,14 @@ class ToggleLightAction : ActionCallback {
         glanceId: GlanceId,
         parameters: ActionParameters,
     ) {
+        val action = if (LightFieldState.get(context) == LightFieldState.STATUS_NO_DEVICE) {
+            MagicshineControlService.ACTION_RETRY_CONNECT
+        } else {
+            MagicshineControlService.ACTION_TOGGLE_100
+        }
         context.startService(
             Intent(context, MagicshineControlService::class.java)
-                .setAction(MagicshineControlService.ACTION_TOGGLE_100),
+                .setAction(action),
         )
     }
 }
