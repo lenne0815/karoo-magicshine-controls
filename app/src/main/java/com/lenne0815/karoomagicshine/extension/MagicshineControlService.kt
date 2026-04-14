@@ -130,6 +130,11 @@ class MagicshineControlService : Service() {
     private fun ensureConnectedInternal(forceRestart: Boolean, delayMs: Long) {
         cancelImmediateWork()
         if (controller.hasLiveConnection() || controller.hasConnectInFlight()) return
+        if (!controller.isBluetoothEnabled()) {
+            Log.d(TAG, "ensureConnected aborted: bluetooth unavailable")
+            LightFieldState.set(this, LightFieldState.STATUS_DISCONNECTED)
+            return
+        }
         if (controller.currentPreferredAddress() == null) {
             Log.d(TAG, "ensureConnected aborted: no preferred lamp")
             LightFieldState.set(this, LightFieldState.STATUS_NO_DEVICE)
@@ -171,6 +176,11 @@ class MagicshineControlService : Service() {
             LightActionReceiver.setToggleEnabled(this, false)
             SharedLightState.set(this, SharedLightState.OutputTarget.OFF, null)
             LightFieldState.set(this, LightFieldState.STATUS_NO_DEVICE)
+            return
+        }
+        if (!controller.isBluetoothEnabled()) {
+            LightActionReceiver.setToggleEnabled(this, false)
+            LightFieldState.set(this, LightFieldState.STATUS_DISCONNECTED)
             return
         }
 
@@ -232,6 +242,12 @@ class MagicshineControlService : Service() {
         startForegroundForExtension("Searching for lamp")
         cancelImmediateWork()
         if (controller.hasLiveConnection() || controller.hasConnectInFlight()) return
+        if (!controller.isBluetoothEnabled()) {
+            Log.d(TAG, "extension ensureConnected aborted: bluetooth unavailable")
+            LightFieldState.set(this, LightFieldState.STATUS_DISCONNECTED)
+            stopForegroundIfHeld()
+            return
+        }
         if (controller.currentPreferredAddress() == null) {
             Log.d(TAG, "extension ensureConnected aborted: no preferred lamp")
             LightFieldState.set(this, LightFieldState.STATUS_NO_DEVICE)
@@ -239,7 +255,7 @@ class MagicshineControlService : Service() {
         }
         Log.d(TAG, "extension ensureConnected: start discovery first")
         LightFieldState.set(this, LightFieldState.STATUS_SEARCHING)
-        controller.startDiscovery(forceRestart = true)
+        controller.startDiscovery(forceRestart = false)
         pendingConnectJob = scope.launch {
             repeat(24) {
                 if (AppUiState.isActive(this@MagicshineControlService)) return@launch
@@ -262,13 +278,19 @@ class MagicshineControlService : Service() {
         pendingExtensionRetryJob?.cancel()
         pendingExtensionRetryJob = scope.launch {
             repeat(3) { attempt ->
-                delay(3500)
+                delay(5000)
                 if (AppUiState.isActive(this@MagicshineControlService)) return@launch
                 if (controller.currentPreferredAddress() == null) return@launch
+                if (!controller.isBluetoothEnabled()) {
+                    Log.d(TAG, "extension retry suppressed: bluetooth unavailable")
+                    LightFieldState.set(this@MagicshineControlService, LightFieldState.STATUS_DISCONNECTED)
+                    stopForegroundIfHeld()
+                    return@launch
+                }
                 if (controller.hasLiveConnection()) return@launch
                 if (controller.hasConnectInFlight()) return@repeat
                 Log.d(TAG, "extension retry ${attempt + 1}")
-                ensureConnectedInternal(forceRestart = true, delayMs = 900)
+                ensureConnectedInternal(forceRestart = false, delayMs = 1400)
             }
         }.also { job ->
             job.invokeOnCompletion {

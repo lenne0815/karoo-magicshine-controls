@@ -16,8 +16,8 @@ android {
         applicationId "com.lenne0815.karoomagicshine"
         minSdk 26
         targetSdk 34
-        versionCode 21
-        versionName "Beta 1.2"
+        versionCode 22
+        versionName "Beta 1.2.1"
     }
 
     buildTypes {

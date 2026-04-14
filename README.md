@@ -9,10 +9,25 @@ Karoo app and Karoo extension for controlling a Magicshine light over BLE.
 Magicshine Controls is a Karoo app plus ride-field extension for controlling supported Magicshine lights over BLE.
 
 - Karoo-native control screen with telemetry
-- in-ride split field for quick light toggle or app launch
+- in-ride split field button for quick light toggle or app launch
 - selection gate for supported lamp families
 
+## Ride Screen Button
+
+Add the Magicshine field to a Karoo ride page to get a split in-ride control:
+
+- left side toggles the light between `OFF` and the remembered last state
+- right side opens the full app
+- the field disconnects again when you leave the ride screen
+
 ## Release Notes
+
+### Beta 1.2.1
+
+- hardened ride reconnect after Bluetooth dropouts
+- reduced BLE scan churn in the ride extension
+- improved app and ride button state sync
+- improved disconnected and no-lamp field states
 
 ### Beta 1.2
 
@@ -40,7 +55,8 @@ The current selector gate looks for BLE names starting with:
 4. Wait for the short connect blink.
 5. Choose `LOW`, `HIGH`, or `OFF`.
 6. Use `25`, `50`, `75`, `100`, `SOS`, or `FLASH`.
-7. Press `DISCONNECT` when finished.
+7. Optionally add the Magicshine field to a ride page for quick in-ride control.
+8. Press `DISCONNECT` when finished.
 
 ## Current Caveats
 

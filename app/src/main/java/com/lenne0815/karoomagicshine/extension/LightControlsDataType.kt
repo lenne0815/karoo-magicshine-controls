@@ -100,7 +100,7 @@ class LightControlsDataType(extension: String) : DataTypeImpl(extension, TYPE_ID
             LightFieldState.STATUS_SEARCHING ->
                 ButtonUi("SEARCH", CARD_COLOR)
             LightFieldState.STATUS_FOUND ->
-                ButtonUi(actualStateLabel, if (actualStateIsOff) CARD_COLOR else SOFT_GREEN_COLOR)
+                ButtonUi(actualStateLabel, CARD_COLOR)
             LightFieldState.STATUS_CONNECTING ->
                 ButtonUi("CONNECT", CARD_COLOR, allowTwoLines = true)
             LightFieldState.STATUS_CONNECTED -> if (actualStateIsOff) {
@@ -114,9 +114,9 @@ class LightControlsDataType(extension: String) : DataTypeImpl(extension, TYPE_ID
                 ButtonUi("ERROR", ORANGE_COLOR)
             LightFieldState.STATUS_DISCONNECTED,
             LightFieldState.STATUS_IDLE ->
-                ButtonUi(actualStateLabel, if (actualStateIsOff) CARD_COLOR else SOFT_GREEN_COLOR)
+                ButtonUi(actualStateLabel, CARD_COLOR)
             else ->
-                ButtonUi(actualStateLabel, if (actualStateIsOff) CARD_COLOR else SOFT_GREEN_COLOR)
+                ButtonUi(actualStateLabel, CARD_COLOR)
         }
     }
 
@@ -227,7 +227,6 @@ class LightControlsDataType(extension: String) : DataTypeImpl(extension, TYPE_ID
         private const val RENDER_VERSION = 10
 
         private val GREEN_COLOR = Color(0xFF20D39B)
-        private val SOFT_GREEN_COLOR = Color(0xFF76DEC0)
         private val CARD_COLOR = Color(0xFF6B6B6B)
         private val CARD_DARK_COLOR = Color(0xFF575757)
         private val ORANGE_COLOR = Color(0xFFFF6B00)

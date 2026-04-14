@@ -1,6 +1,7 @@
 package com.lenne0815.karoomagicshine.extension
 
 import android.Manifest
+import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -56,6 +57,7 @@ class MagicshineBleController(
     private val prefs by lazy { appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val centralManager by lazy { CentralManager.Factory.native(appContext, scope) }
+    private val bluetoothManager by lazy { appContext.getSystemService(BluetoothManager::class.java) }
 
     private val targetService = Uuid.parse("0000FFE1-0000-1000-8000-00805f9b34fb")
     private val targetChar = Uuid.parse("0000FFE0-0000-1000-8000-00805f9b34fb")
@@ -107,6 +109,11 @@ class MagicshineBleController(
         }
         if (!hasBlePermissions()) {
             publishStatus("missing bluetooth permissions")
+            return
+        }
+        if (!isBluetoothEnabled()) {
+            publishConnectionStatus("disconnected")
+            publishStatus("disconnected")
             return
         }
 
@@ -200,20 +207,30 @@ class MagicshineBleController(
                     publishStatus("searching")
                     return@withLock
                 }
+                if (!isBluetoothEnabled()) {
+                    publishConnectionStatus("disconnected")
+                    publishStatus("disconnected")
+                    return@withLock
+                }
                 publishConnectionStatus("connecting")
                 val cached = preferredPeripheral().also { if (it != null) lastPeripheral = it }
                 val isConnected = cached?.state?.value is ConnectionState.Connected
                 if (!isConnected && cached == null) {
                     startDiscovery()
-                    startDiscovery(forceRestart = true)
                 }
 
                 val target = awaitTarget() ?: run {
-                    Log.d(
-                        TAG,
-                        "awaitTarget timeout preferred=$preferredAddress seenCount=$seenCount lastSeenTag=$lastSeenTag",
-                    )
-                    publishConnectionStatus("no device")
+                    if (!isBluetoothEnabled()) {
+                        Log.d(TAG, "awaitTarget aborted: bluetooth unavailable preferred=$preferredAddress")
+                        publishConnectionStatus("disconnected")
+                        publishStatus("disconnected")
+                    } else {
+                        Log.d(
+                            TAG,
+                            "awaitTarget timeout preferred=$preferredAddress seenCount=$seenCount lastSeenTag=$lastSeenTag",
+                        )
+                        publishConnectionStatus("no device")
+                    }
                     return@withLock
                 }
 
@@ -395,16 +412,15 @@ class MagicshineBleController(
     private suspend fun awaitTarget(): Peripheral? {
         var p = preferredPeripheral().also { if (it != null) lastPeripheral = it } ?: lastPeripheral
         if (p?.state?.value is ConnectionState.Connected) return p
+        if (!isBluetoothEnabled()) return null
         if (p == null) {
             publishStatus("searching")
             startDiscovery()
             for (i in 0 until 48) {
+                if (!isBluetoothEnabled()) return null
                 delay(25)
                 p = preferredPeripheral().also { if (it != null) lastPeripheral = it } ?: lastPeripheral
                 if (p?.state?.value is ConnectionState.Connected || p != null) break
-                if ((i == 11 || i == 23) && seenCount == 0) {
-                    startDiscovery(forceRestart = true)
-                }
                 if (i % 12 == 11) {
                     publishStatus("searching")
                 }
@@ -534,6 +550,8 @@ class MagicshineBleController(
             ContextCompat.checkSelfPermission(appContext, it) == PackageManager.PERMISSION_GRANTED
         }
     }
+
+    fun isBluetoothEnabled(): Boolean = bluetoothManager?.adapter?.isEnabled == true
 
     private fun publishStatus(message: String) {
         val normalized = normalizeStatus(message) ?: return
