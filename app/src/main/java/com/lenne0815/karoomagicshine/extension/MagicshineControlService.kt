@@ -40,6 +40,9 @@ class MagicshineControlService : Service() {
         private const val EXTENSION_DISCOVERY_WAIT_MS = 8_000L
         private const val EXTENSION_DISCOVERY_POLL_MS = 500L
         private const val EXTENSION_RETRY_COOLDOWN_MS = 15_000L
+        private const val UI_RETRY_ATTEMPTS = 3
+        private const val UI_RETRY_CONNECT_WAIT_MS = 4_000L
+        private const val UI_RETRY_POLL_MS = 100L
         const val ACTION_TOGGLE_100 = "com.lenne0815.karoomagicshine.action.TOGGLE_100"
         const val ACTION_RETRY_CONNECT = "com.lenne0815.karoomagicshine.action.RETRY_CONNECT"
         const val ACTION_FIELD_VISIBLE = "com.lenne0815.karoomagicshine.action.FIELD_VISIBLE"
@@ -173,15 +176,37 @@ class MagicshineControlService : Service() {
         }
         Log.d(TAG, "retry connect: force restart discovery")
         LightFieldState.set(this, LightFieldState.STATUS_SEARCHING)
-        controller.startDiscovery(forceRestart = true)
         pendingConnectJob = scope.launch {
-            delay(300)
-            controller.connect()
+            repeat(UI_RETRY_ATTEMPTS) { attempt ->
+                if (controller.hasLiveConnection()) return@launch
+                Log.d(TAG, "retry connect attempt ${attempt + 1}/$UI_RETRY_ATTEMPTS")
+                LightFieldState.set(this@MagicshineControlService, LightFieldState.STATUS_SEARCHING)
+                controller.startDiscovery(forceRestart = true)
+                delay(if (attempt == 0) 300 else 900)
+                if (!controller.hasLiveConnection() && !controller.hasConnectInFlight()) {
+                    controller.connect()
+                }
+                val connected = waitForConnectionResult(UI_RETRY_CONNECT_WAIT_MS)
+                if (connected) return@launch
+            }
+            if (!controller.hasLiveConnection()) {
+                LightFieldState.set(this@MagicshineControlService, LightFieldState.STATUS_NO_DEVICE)
+            }
         }.also { job ->
             job.invokeOnCompletion {
                 if (pendingConnectJob === job) pendingConnectJob = null
             }
         }
+    }
+
+    private suspend fun waitForConnectionResult(timeoutMs: Long): Boolean {
+        val steps = (timeoutMs / UI_RETRY_POLL_MS).toInt().coerceAtLeast(1)
+        repeat(steps) {
+            if (controller.hasLiveConnection()) return true
+            if (!controller.hasConnectInFlight() && it > 0) return false
+            delay(UI_RETRY_POLL_MS)
+        }
+        return controller.hasLiveConnection()
     }
 
     private fun handleToggle100() {
