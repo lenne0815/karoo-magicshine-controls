@@ -53,7 +53,7 @@
 
         <meta-data
             android:name="io.hammerhead.karooext.MANIFEST_URL"
-            android:value="https://raw.githubusercontent.com/lenne0815/karoo-magicshine-controls/a605f41/app/manifest.json" />
+            android:value="https://raw.githubusercontent.com/lenne0815/karoo-magicshine-controls/main/app/manifest.json" />
 
         <receiver
             android:name=".extension.LightActionReceiver"

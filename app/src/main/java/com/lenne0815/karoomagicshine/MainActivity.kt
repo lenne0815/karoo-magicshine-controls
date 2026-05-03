@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import android.os.Bundle
@@ -36,6 +37,14 @@ class MainActivity : AppCompatActivity() {
         private const val PREFS_NAME = "magicshine_prefs"
         private const val PREF_SELECTED_LAMP_ADDRESS = "selected_lamp_address"
         private const val PREF_SELECTED_LAMP_NAME = "selected_lamp_name"
+        private const val KAROO_APPSTORE_PACKAGE = "io.hammerhead.appstore"
+        private const val KAROO_APPSTORE_INFO_ACTION = "io.hammerhead.action.APP_INFO"
+        private const val KAROO_APPSTORE_INFO_ACTIVITY = "io.hammerhead.appstore.appInfo.AppInfoActivity"
+        private const val KAROO_APPSTORE_LIST_ACTIVITY = "io.hammerhead.appstore.appList.AppListActivity"
+        private const val UPDATE_MANIFEST_URL =
+            "https://raw.githubusercontent.com/lenne0815/karoo-magicshine-controls/main/app/manifest.json"
+        private const val UPDATE_FALLBACK_URL =
+            "https://github.com/lenne0815/karoo-magicshine-controls/releases/latest"
     }
 
     private var controlService: MagicshineControlService? = null
@@ -50,6 +59,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var connectButton: View
     private lateinit var connectLabelView: TextView
     private lateinit var connectStateView: TextView
+    private lateinit var updateButton: View
     private lateinit var module1Button: View
     private lateinit var module2Button: View
     private lateinit var offButton: View
@@ -148,6 +158,7 @@ class MainActivity : AppCompatActivity() {
         connectButton = findViewById(R.id.btnConnect)
         connectLabelView = findViewById(R.id.txtConnectLabel)
         connectStateView = findViewById(R.id.txtConnectState)
+        updateButton = findViewById(R.id.btnUpdate)
         module1Button = findViewById(R.id.btnModule1)
         module2Button = findViewById(R.id.btnModule2)
         offButton = findViewById(R.id.btnOff)
@@ -177,6 +188,9 @@ class MainActivity : AppCompatActivity() {
 
         connectButton.setOnClickListener {
             connectIfPermitted()
+        }
+        updateButton.setOnClickListener {
+            openOfficialUpdatePath()
         }
         changeLampButton.setOnClickListener {
             controlService?.stopRepeatingCommand()
@@ -274,6 +288,44 @@ class MainActivity : AppCompatActivity() {
         }
         controlService?.retryDiscoveryAndConnectFromUi()
     }
+
+    private fun openOfficialUpdatePath() {
+        val appInfoIntent = Intent(KAROO_APPSTORE_INFO_ACTION).apply {
+            component = ComponentName(KAROO_APPSTORE_PACKAGE, KAROO_APPSTORE_INFO_ACTIVITY)
+            putExtra("manifestUrl", UPDATE_MANIFEST_URL)
+        }
+        if (tryStartIntent(appInfoIntent)) {
+            Toast.makeText(this, "Opened Karoo update page", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val appStoreIntent = Intent(Intent.ACTION_MAIN).apply {
+            addCategory(Intent.CATEGORY_LAUNCHER)
+            component = ComponentName(KAROO_APPSTORE_PACKAGE, KAROO_APPSTORE_LIST_ACTIVITY)
+        }
+        if (tryStartIntent(appStoreIntent)) {
+            Toast.makeText(this, "Open Magicshine Controls in Extensions to update", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        packageManager.getLaunchIntentForPackage(KAROO_APPSTORE_PACKAGE)?.let { launchIntent ->
+            if (tryStartIntent(launchIntent)) {
+                Toast.makeText(this, "Open Magicshine Controls in Extensions to update", Toast.LENGTH_SHORT).show()
+                return
+            }
+        }
+
+        val fallbackIntent = Intent(Intent.ACTION_VIEW, Uri.parse(UPDATE_FALLBACK_URL))
+        if (!tryStartIntent(fallbackIntent)) {
+            Toast.makeText(this, "Open Extensions Library from the Karoo app menu", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun tryStartIntent(intent: Intent): Boolean =
+        runCatching {
+            startActivity(intent)
+            true
+        }.getOrDefault(false)
 
     private fun sendIfPermitted(frame: String) {
         if (!hasPermissions()) {

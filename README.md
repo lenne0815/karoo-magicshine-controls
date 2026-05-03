@@ -22,6 +22,12 @@ Add the Magicshine field to a Karoo ride page to get a split in-ride control:
 
 ## Release Notes
 
+### Beta 1.3.2
+
+- added in-app `UPDATE` button that opens the official Karoo Appstore detail page
+- kept update handoff in Hammerhead Appstore instead of silent installing
+- pointed future update checks at the live GitHub manifest
+
 ### Beta 1.3.1
 
 - hardened app `CONNECT` recovery from stale `found` / disconnected states
