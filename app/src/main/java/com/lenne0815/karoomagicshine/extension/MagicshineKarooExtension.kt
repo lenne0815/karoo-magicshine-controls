@@ -107,28 +107,36 @@ class MagicshineKarooExtension : KarooExtension("karoo-magicshine-controls", "1.
             serviceConnection,
             Context.BIND_AUTO_CREATE or Context.BIND_IMPORTANT,
         )
-        karooSystem.connect { connected ->
-            if (connected) {
-                Log.d(TAG, "KarooSystem connected")
-                karooConnected = true
-                karooSystem.dispatch(RequestBluetooth(extension))
-                lightService?.onExtensionReadyFromBoundClient()
-                lightService?.let { service ->
-                    LightFieldState.set(this, LightFieldState.STATUS_IDLE)
-                    lightLifecycleHandler?.shutdownHandling()
-                    lightLifecycleHandler = LightLifecycleHandler(this, karooSystem, service).also {
-                        it.startHandling()
-                        if (pendingRideOpen) {
-                            it.ensureConnectedNow("pending-ride-open")
-                        } else {
-                            it.ensureConnectedNow("extension-ready")
+        runCatching {
+            karooSystem.connect { connected ->
+                if (connected) {
+                    Log.d(TAG, "KarooSystem connected")
+                    karooConnected = true
+                    runCatching {
+                        karooSystem.dispatch(RequestBluetooth(extension))
+                    }.onFailure { throwable ->
+                        Log.w(TAG, "Unable to request Karoo Bluetooth access", throwable)
+                    }
+                    lightService?.onExtensionReadyFromBoundClient()
+                    lightService?.let { service ->
+                        LightFieldState.set(this, LightFieldState.STATUS_IDLE)
+                        lightLifecycleHandler?.shutdownHandling()
+                        lightLifecycleHandler = LightLifecycleHandler(this, karooSystem, service).also {
+                            it.startHandling()
+                            if (pendingRideOpen) {
+                                it.ensureConnectedNow("pending-ride-open")
+                            } else {
+                                it.ensureConnectedNow("extension-ready")
+                            }
                         }
                     }
+                } else {
+                    Log.d(TAG, "KarooSystem disconnected")
+                    karooConnected = false
                 }
-            } else {
-                Log.d(TAG, "KarooSystem disconnected")
-                karooConnected = false
             }
+        }.onFailure { throwable ->
+            Log.w(TAG, "Unable to connect to KarooSystem", throwable)
         }
     }
 
@@ -144,8 +152,16 @@ class MagicshineKarooExtension : KarooExtension("karoo-magicshine-controls", "1.
             service.stopDiscovery()
         }
         LightFieldState.set(this, LightFieldState.STATUS_DISCONNECTED)
-        karooSystem.dispatch(ReleaseBluetooth(extension))
-        karooSystem.disconnect()
+        runCatching {
+            karooSystem.dispatch(ReleaseBluetooth(extension))
+        }.onFailure { throwable ->
+            Log.w(TAG, "Unable to release Karoo Bluetooth access", throwable)
+        }
+        runCatching {
+            karooSystem.disconnect()
+        }.onFailure { throwable ->
+            Log.w(TAG, "Unable to disconnect from KarooSystem", throwable)
+        }
         runCatching { unbindService(serviceConnection) }
         super.onDestroy()
     }

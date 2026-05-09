@@ -1,11 +1,11 @@
 {
   "label": "Magicshine Controls",
   "packageName": "com.lenne0815.karoomagicshine",
-  "iconUrl": "https://github.com/lenne0815/karoo-magicshine-controls/releases/download/beta-1.3.3/icon.png",
-  "latestApkUrl": "https://github.com/lenne0815/karoo-magicshine-controls/releases/download/beta-1.3.3/karoo-magicshine-controls-beta-1.3.3.apk",
-  "latestVersion": "Beta 1.3.3",
-  "latestVersionCode": 26,
+  "iconUrl": "https://github.com/lenne0815/karoo-magicshine-controls/releases/download/beta-1.3.4/icon.png",
+  "latestApkUrl": "https://github.com/lenne0815/karoo-magicshine-controls/releases/download/beta-1.3.4/karoo-magicshine-controls-beta-1.3.4.apk",
+  "latestVersion": "Beta 1.3.4",
+  "latestVersionCode": 27,
   "developer": "Lennart Thomsen",
   "description": "Control supported Magicshine lights from the Karoo app or the in-ride field, with lamp selection, quick beam switching, and battery and temperature telemetry.",
-  "releaseNotes": "* Removed the in-app UPDATE button\n* Restored the standard Karoo Extensions Library update flow\n* Kept live manifest metadata so Karoo can show its system UPDATE button"
+  "releaseNotes": "* Hardened Karoo extension lifecycle against Appstore service restarts\n* Prevented unhandled Karoo binder disconnects during extension shutdown\n* Kept the standard Karoo Extensions Library update flow"
 }
