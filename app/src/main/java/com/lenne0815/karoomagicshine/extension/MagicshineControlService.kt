@@ -3,7 +3,11 @@ package com.lenne0815.karoomagicshine.extension
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.bluetooth.BluetoothAdapter
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.Binder
@@ -40,6 +44,8 @@ class MagicshineControlService : Service() {
         private const val EXTENSION_DISCOVERY_WAIT_MS = 8_000L
         private const val EXTENSION_DISCOVERY_POLL_MS = 500L
         private const val EXTENSION_RETRY_COOLDOWN_MS = 15_000L
+        private const val BLUETOOTH_RETRY_ATTEMPTS = 8
+        private const val BLUETOOTH_RETRY_WAIT_MS = 2_000L
         private const val UI_RETRY_ATTEMPTS = 3
         private const val UI_RETRY_CONNECT_WAIT_MS = 4_000L
         private const val UI_RETRY_POLL_MS = 100L
@@ -47,6 +53,8 @@ class MagicshineControlService : Service() {
         const val ACTION_RETRY_CONNECT = "com.lenne0815.karoomagicshine.action.RETRY_CONNECT"
         const val ACTION_FIELD_VISIBLE = "com.lenne0815.karoomagicshine.action.FIELD_VISIBLE"
         const val ACTION_FIELD_HIDDEN = "com.lenne0815.karoomagicshine.action.FIELD_HIDDEN"
+        const val ACTION_REQUEST_KAROO_BLUETOOTH =
+            "com.lenne0815.karoomagicshine.action.REQUEST_KAROO_BLUETOOTH"
     }
 
     private val binder = LocalBinder()
@@ -55,6 +63,8 @@ class MagicshineControlService : Service() {
     @Volatile private var pendingConnectJob: Job? = null
     @Volatile private var pendingToggleJob: Job? = null
     @Volatile private var pendingExtensionRetryJob: Job? = null
+    @Volatile private var pendingBluetoothRetryJob: Job? = null
+    @Volatile private var pendingConnectAfterBluetooth: Boolean = false
     @Volatile private var activeFieldViews: Int = 0
     @Volatile private var extensionReady: Boolean = false
     @Volatile private var pendingAutoConnect: Boolean = false
@@ -70,11 +80,26 @@ class MagicshineControlService : Service() {
         )
     }
 
+    private val bluetoothStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != BluetoothAdapter.ACTION_STATE_CHANGED) return
+            val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
+            Log.d(TAG, "bluetooth state changed state=$state pending=$pendingConnectAfterBluetooth")
+            if (state == BluetoothAdapter.STATE_ON && pendingConnectAfterBluetooth) {
+                pendingConnectAfterBluetooth = false
+                pendingBluetoothRetryJob?.cancel()
+                pendingBluetoothRetryJob = null
+                ensureConnectedFromExtension()
+            }
+        }
+    }
+
     override fun onBind(intent: Intent?): IBinder = binder
 
     override fun onCreate() {
         super.onCreate()
         ensureNotificationChannel()
+        registerReceiver(bluetoothStateReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED))
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -133,14 +158,16 @@ class MagicshineControlService : Service() {
         cancelImmediateWork()
         pendingExtensionRetryJob?.cancel()
         pendingExtensionRetryJob = null
+        pendingBluetoothRetryJob?.cancel()
+        pendingBluetoothRetryJob = null
+        pendingConnectAfterBluetooth = false
     }
 
     private fun ensureConnectedInternal(forceRestart: Boolean, delayMs: Long) {
         cancelImmediateWork()
         if (controller.hasLiveConnection() || controller.hasConnectInFlight()) return
         if (!controller.isBluetoothEnabled()) {
-            Log.d(TAG, "ensureConnected aborted: bluetooth unavailable")
-            LightFieldState.set(this, LightFieldState.STATUS_DISCONNECTED)
+            waitForBluetoothAndRetry("ensureConnected")
             return
         }
         if (controller.currentPreferredAddress() == null) {
@@ -165,8 +192,7 @@ class MagicshineControlService : Service() {
     private fun retryDiscoveryAndConnect() {
         cancelPendingWork()
         if (!controller.isBluetoothEnabled()) {
-            Log.d(TAG, "retry connect aborted: bluetooth unavailable")
-            LightFieldState.set(this, LightFieldState.STATUS_DISCONNECTED)
+            waitForBluetoothAndRetry("manual retry")
             return
         }
         if (controller.currentPreferredAddress() == null) {
@@ -301,9 +327,7 @@ class MagicshineControlService : Service() {
         cancelImmediateWork()
         if (controller.hasLiveConnection() || controller.hasConnectInFlight()) return
         if (!controller.isBluetoothEnabled()) {
-            Log.d(TAG, "extension ensureConnected aborted: bluetooth unavailable")
-            LightFieldState.set(this, LightFieldState.STATUS_DISCONNECTED)
-            stopForegroundIfHeld()
+            waitForBluetoothAndRetry("extension ensureConnected")
             return
         }
         if (controller.currentPreferredAddress() == null) {
@@ -376,8 +400,49 @@ class MagicshineControlService : Service() {
     fun clearStalePublishedConnectionState() = controller.clearStalePublishedConnectionState()
 
     override fun onDestroy() {
+        runCatching { unregisterReceiver(bluetoothStateReceiver) }
+        cancelPendingWork()
         stopForegroundIfHeld()
         super.onDestroy()
+    }
+
+    private fun waitForBluetoothAndRetry(reason: String) {
+        Log.d(TAG, "$reason waiting for Karoo Bluetooth")
+        requestKarooBluetooth(reason)
+        pendingConnectAfterBluetooth = true
+        LightFieldState.set(this, LightFieldState.STATUS_SEARCHING)
+        if (pendingBluetoothRetryJob?.isActive == true) return
+        pendingBluetoothRetryJob = scope.launch {
+            repeat(BLUETOOTH_RETRY_ATTEMPTS) { attempt ->
+                delay(BLUETOOTH_RETRY_WAIT_MS)
+                if (!pendingConnectAfterBluetooth) return@launch
+                Log.d(TAG, "bluetooth retry ${attempt + 1}/$BLUETOOTH_RETRY_ATTEMPTS for $reason")
+                requestKarooBluetooth("$reason retry ${attempt + 1}")
+                if (controller.isBluetoothEnabled()) {
+                    pendingConnectAfterBluetooth = false
+                    ensureConnectedFromExtension()
+                    return@launch
+                }
+            }
+            if (pendingConnectAfterBluetooth) {
+                Log.d(TAG, "$reason gave up waiting for Bluetooth")
+                pendingConnectAfterBluetooth = false
+                LightFieldState.set(this@MagicshineControlService, LightFieldState.STATUS_DISCONNECTED)
+                stopForegroundIfHeld()
+            }
+        }.also { job ->
+            job.invokeOnCompletion {
+                if (pendingBluetoothRetryJob === job) pendingBluetoothRetryJob = null
+            }
+        }
+    }
+
+    private fun requestKarooBluetooth(reason: String) {
+        Log.d(TAG, "requesting Karoo Bluetooth access ($reason)")
+        sendBroadcast(
+            Intent(ACTION_REQUEST_KAROO_BLUETOOTH)
+                .setPackage(packageName),
+        )
     }
 
     private fun ensureNotificationChannel() {

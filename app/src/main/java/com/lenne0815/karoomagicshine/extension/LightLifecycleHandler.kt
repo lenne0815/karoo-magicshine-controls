@@ -8,6 +8,7 @@ class LightLifecycleHandler(
     private val context: Context,
     karooSystem: KarooSystemService,
     private val service: MagicshineControlService,
+    private val requestBluetoothAccess: (String) -> Unit,
 ) : RideHandler(karooSystem) {
 
     companion object {
@@ -60,6 +61,7 @@ class LightLifecycleHandler(
             Log.d(TAG, "Skipping ride connect while app UI is active ($reason)")
             return
         }
+        requestBluetoothAccess(reason)
         service.clearStalePublishedConnectionState()
         val hasLiveConnection = service.hasLiveConnection()
         val hasConnectInFlight = service.hasConnectInFlight()

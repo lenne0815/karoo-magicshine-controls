@@ -126,15 +126,16 @@ class MagicshineBleController(
             try {
                 val timedOut = withTimeoutOrNull(DISCOVERY_SESSION_TIMEOUT_MS) {
                     centralManager
-                        .scan { Any { } }
+                        .scan()
                         .collect { result ->
                             val p = result.peripheral
-                            val name = p.name ?: "<unnamed>"
+                            val name = sanitizeLampName(result.advertisingData.name ?: p.name)
                             val tag = "$name/${p.address}"
                             seenCount += 1
                             lastSeenTag = tag
 
                             if (matchesSupportedFamily(name)) {
+                                Log.d(TAG, "supported lamp seen name=$name address=${p.address} rssi=${result.rssi}")
                                 val candidate = LampCandidate(address = p.address, name = name)
                                 val preferred = preferredAddress
                                 synchronized(candidateLock) {
@@ -526,6 +527,11 @@ class MagicshineBleController(
 
     private fun matchesSupportedFamily(name: String): Boolean =
         SUPPORTED_NAME_PREFIXES.any { prefix -> name.startsWith(prefix, ignoreCase = true) }
+
+    private fun sanitizeLampName(name: String?): String {
+        val cleaned = name?.replace("\u0000", "")?.trim().orEmpty()
+        return cleaned.ifBlank { "<unnamed>" }
+    }
 
     private suspend fun waitUntil(
         timeoutMs: Long,

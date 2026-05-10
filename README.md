@@ -22,6 +22,12 @@ Add the Magicshine field to a Karoo ride page to get a split in-ride control:
 
 ## Release Notes
 
+### Beta 1.3.5
+
+- reconnects through Karoo Bluetooth startup instead of giving up while a ride is active
+- fixes lamp discovery on Karoo by using an unfiltered BLE scan and advertisement names
+- sanitizes Magicshine lamp names before saving them
+
 ### Beta 1.3.4
 
 - hardened Karoo extension lifecycle against Appstore service restarts

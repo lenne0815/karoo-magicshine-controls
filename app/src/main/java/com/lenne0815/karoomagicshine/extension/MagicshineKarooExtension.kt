@@ -1,6 +1,7 @@
 package com.lenne0815.karoomagicshine.extension
 
 import android.app.Service.RECEIVER_EXPORTED
+import android.app.Service.RECEIVER_NOT_EXPORTED
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
@@ -43,11 +44,7 @@ class MagicshineKarooExtension : KarooExtension("karoo-magicshine-controls", "1.
                 service.onExtensionReadyFromBoundClient()
                 LightFieldState.set(this@MagicshineKarooExtension, LightFieldState.STATUS_IDLE)
                 lightLifecycleHandler?.shutdownHandling()
-                lightLifecycleHandler = LightLifecycleHandler(
-                    this@MagicshineKarooExtension,
-                    karooSystem,
-                    service,
-                ).also {
+                lightLifecycleHandler = createLifecycleHandler(service).also {
                     it.startHandling()
                     if (pendingRideOpen) {
                         it.ensureConnectedNow("pending-ride-open")
@@ -63,6 +60,13 @@ class MagicshineKarooExtension : KarooExtension("karoo-magicshine-controls", "1.
             lightLifecycleHandler = null
             lightService = null
             LightFieldState.set(this@MagicshineKarooExtension, LightFieldState.STATUS_DISCONNECTED)
+        }
+    }
+
+    private val bluetoothAccessReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != MagicshineControlService.ACTION_REQUEST_KAROO_BLUETOOTH) return
+            requestBluetoothAccess("service-request")
         }
     }
 
@@ -102,6 +106,11 @@ class MagicshineKarooExtension : KarooExtension("karoo-magicshine-controls", "1.
             IntentFilter(ACTION_RIDE_STOP),
             RECEIVER_EXPORTED,
         )
+        registerReceiver(
+            bluetoothAccessReceiver,
+            IntentFilter(MagicshineControlService.ACTION_REQUEST_KAROO_BLUETOOTH),
+            RECEIVER_NOT_EXPORTED,
+        )
         bindService(
             Intent(this, MagicshineControlService::class.java),
             serviceConnection,
@@ -112,16 +121,12 @@ class MagicshineKarooExtension : KarooExtension("karoo-magicshine-controls", "1.
                 if (connected) {
                     Log.d(TAG, "KarooSystem connected")
                     karooConnected = true
-                    runCatching {
-                        karooSystem.dispatch(RequestBluetooth(extension))
-                    }.onFailure { throwable ->
-                        Log.w(TAG, "Unable to request Karoo Bluetooth access", throwable)
-                    }
+                    requestBluetoothAccess("karoo-system-connected")
                     lightService?.onExtensionReadyFromBoundClient()
                     lightService?.let { service ->
                         LightFieldState.set(this, LightFieldState.STATUS_IDLE)
                         lightLifecycleHandler?.shutdownHandling()
-                        lightLifecycleHandler = LightLifecycleHandler(this, karooSystem, service).also {
+                        lightLifecycleHandler = createLifecycleHandler(service).also {
                             it.startHandling()
                             if (pendingRideOpen) {
                                 it.ensureConnectedNow("pending-ride-open")
@@ -145,6 +150,7 @@ class MagicshineKarooExtension : KarooExtension("karoo-magicshine-controls", "1.
         lightLifecycleHandler = null
         runCatching { unregisterReceiver(rideAppOpenedReceiver) }
         runCatching { unregisterReceiver(rideStopReceiver) }
+        runCatching { unregisterReceiver(bluetoothAccessReceiver) }
         lightService?.let { service ->
             service.unregisterListener(serviceListener)
             service.stopRepeatingCommand()
@@ -172,6 +178,23 @@ class MagicshineKarooExtension : KarooExtension("karoo-magicshine-controls", "1.
             MagicshineAction.LEVEL_10 -> lightService?.send("DE14A2010101010A000000000000000000BB07ED")
             MagicshineAction.LEVEL_100 -> lightService?.send("DE14A20101010160000000000000000000BB6DED")
             null -> Unit
+        }
+    }
+
+    private fun createLifecycleHandler(service: MagicshineControlService): LightLifecycleHandler =
+        LightLifecycleHandler(
+            this,
+            karooSystem,
+            service,
+            requestBluetoothAccess = ::requestBluetoothAccess,
+        )
+
+    private fun requestBluetoothAccess(reason: String) {
+        runCatching {
+            Log.d(TAG, "Requesting Karoo Bluetooth access ($reason)")
+            karooSystem.dispatch(RequestBluetooth(extension))
+        }.onFailure { throwable ->
+            Log.w(TAG, "Unable to request Karoo Bluetooth access ($reason)", throwable)
         }
     }
 
