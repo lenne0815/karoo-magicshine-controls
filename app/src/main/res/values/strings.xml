@@ -4,5 +4,5 @@
     <string name="action_light_10">Magicshine Light 10%</string>
     <string name="action_light_100">Magicshine Light 100%</string>
     <string name="field_light_controls">Light Controls</string>
-    <string name="field_light_controls_desc">Toggle the light or open the app from the ride field</string>
+    <string name="field_light_controls_desc">Toggle or flash the light, view its battery, or open the app from the ride field</string>
 </resources>

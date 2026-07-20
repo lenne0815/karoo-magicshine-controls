@@ -49,7 +49,9 @@ class MagicshineControlService : Service() {
         private const val UI_RETRY_ATTEMPTS = 3
         private const val UI_RETRY_CONNECT_WAIT_MS = 4_000L
         private const val UI_RETRY_POLL_MS = 100L
+        private const val RIDE_FLASH_DURATION_MS = 5_000L
         const val ACTION_TOGGLE_100 = "com.lenne0815.karoomagicshine.action.TOGGLE_100"
+        const val ACTION_FLASH_5_SECONDS = "com.lenne0815.karoomagicshine.action.FLASH_5_SECONDS"
         const val ACTION_RETRY_CONNECT = "com.lenne0815.karoomagicshine.action.RETRY_CONNECT"
         const val ACTION_FIELD_VISIBLE = "com.lenne0815.karoomagicshine.action.FIELD_VISIBLE"
         const val ACTION_FIELD_HIDDEN = "com.lenne0815.karoomagicshine.action.FIELD_HIDDEN"
@@ -62,6 +64,7 @@ class MagicshineControlService : Service() {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     @Volatile private var pendingConnectJob: Job? = null
     @Volatile private var pendingToggleJob: Job? = null
+    @Volatile private var pendingFlashJob: Job? = null
     @Volatile private var pendingExtensionRetryJob: Job? = null
     @Volatile private var pendingBluetoothRetryJob: Job? = null
     @Volatile private var pendingConnectAfterBluetooth: Boolean = false
@@ -75,7 +78,10 @@ class MagicshineControlService : Service() {
             applicationContext,
             onStatus = { status -> listeners.toList().forEach { it.onStatus(status) } },
             onConnectionStatus = { status -> listeners.toList().forEach { it.onConnectionStatus(status) } },
-            onBatteryStatus = { status -> listeners.toList().forEach { it.onBatteryStatus(status) } },
+            onBatteryStatus = { status ->
+                RideFieldState.setBatteryStatus(applicationContext, status)
+                listeners.toList().forEach { it.onBatteryStatus(status) }
+            },
             onTemperatureStatus = { status -> listeners.toList().forEach { it.onTemperatureStatus(status) } },
         )
     }
@@ -98,6 +104,8 @@ class MagicshineControlService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        RideFieldState.stopFlash(this)
+        RideFieldState.setBatteryStatus(this, "?")
         ensureNotificationChannel()
         registerReceiver(bluetoothStateReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED))
     }
@@ -105,6 +113,7 @@ class MagicshineControlService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_TOGGLE_100 -> handleToggle100()
+            ACTION_FLASH_5_SECONDS -> handleRideFlash()
             ACTION_RETRY_CONNECT -> retryDiscoveryAndConnect()
             ACTION_FIELD_VISIBLE -> markFieldVisible()
             ACTION_FIELD_HIDDEN -> markFieldHidden()
@@ -236,6 +245,7 @@ class MagicshineControlService : Service() {
     }
 
     private fun handleToggle100() {
+        cancelRideFlash()
         cancelPendingWork()
         val enabled = LightActionReceiver.isToggleEnabled(this)
         val snapshot = SharedLightState.get(this)
@@ -245,7 +255,9 @@ class MagicshineControlService : Service() {
             SharedLightState.OutputTarget.OFF -> MagicshineModule.MODULE_1
         }
         val targetPercent = snapshot.lastOnLevelPercent ?: 100
+        val targetMode = snapshot.lastOnMode
         if (enabled && controller.hasLiveConnection()) {
+            controller.stopRepeatingCommand()
             LightActionReceiver.setToggleEnabled(this, false)
             SharedLightState.set(this, SharedLightState.OutputTarget.OFF, null)
             LightFieldState.set(this, LightFieldState.STATUS_CONNECTED)
@@ -287,14 +299,112 @@ class MagicshineControlService : Service() {
                     MagicshineModule.MODULE_1 -> SharedLightState.OutputTarget.LOW
                 },
                 targetPercent,
+                targetMode,
             )
             LightFieldState.set(this@MagicshineControlService, LightFieldState.STATUS_CONNECTED)
-            controller.send(MagicshineProtocol.buildPresetFrame(targetModule, targetPercent))
+            when (targetMode) {
+                SharedLightState.Mode.STEADY ->
+                    controller.send(MagicshineProtocol.buildPresetFrame(targetModule, targetPercent))
+                SharedLightState.Mode.SOS ->
+                    controller.startRepeatingCommand(
+                        MagicshineProtocol.buildModeFrame(
+                            targetModule,
+                            com.lenne0815.karoomagicshine.MagicshineMode.SOS,
+                        ),
+                        1_500L,
+                    )
+                SharedLightState.Mode.BLITZ ->
+                    controller.startRepeatingCommand(
+                        MagicshineProtocol.buildModeFrame(
+                            targetModule,
+                            com.lenne0815.karoomagicshine.MagicshineMode.BLITZ,
+                        ),
+                        1_500L,
+                    )
+            }
         }.also { job ->
             job.invokeOnCompletion {
                 if (pendingToggleJob === job) pendingToggleJob = null
             }
         }
+    }
+
+    private fun handleRideFlash() {
+        cancelRideFlash()
+        cancelPendingWork()
+        if (controller.currentPreferredAddress() == null) {
+            LightFieldState.set(this, LightFieldState.STATUS_NO_DEVICE)
+            return
+        }
+        if (!controller.isBluetoothEnabled()) {
+            LightFieldState.set(this, LightFieldState.STATUS_DISCONNECTED)
+            return
+        }
+
+        val previousState = SharedLightState.get(this)
+        pendingFlashJob = scope.launch {
+            if (!controller.hasLiveConnection() && !controller.hasConnectInFlight()) {
+                controller.connect()
+            }
+            if (!waitForConnectionResult(UI_RETRY_CONNECT_WAIT_MS)) {
+                LightFieldState.set(this@MagicshineControlService, LightFieldState.STATUS_NO_DEVICE)
+                return@launch
+            }
+
+            val flashModule = moduleFor(previousState.outputTarget, previousState.lastOnTarget)
+            val flashFrame = MagicshineProtocol.buildModeFrame(flashModule, com.lenne0815.karoomagicshine.MagicshineMode.BLITZ)
+            RideFieldState.startFlash(this@MagicshineControlService, RIDE_FLASH_DURATION_MS)
+            controller.stopRepeatingCommand()
+            controller.startRepeatingCommand(flashFrame, 1_500L)
+            delay(RIDE_FLASH_DURATION_MS)
+            controller.stopRepeatingCommand()
+            restoreLightState(previousState)
+            RideFieldState.stopFlash(this@MagicshineControlService)
+        }.also { job ->
+            job.invokeOnCompletion {
+                if (pendingFlashJob === job) {
+                    pendingFlashJob = null
+                    RideFieldState.stopFlash(this@MagicshineControlService)
+                }
+            }
+        }
+    }
+
+    private fun restoreLightState(snapshot: SharedLightState.Snapshot) {
+        if (snapshot.outputTarget == SharedLightState.OutputTarget.OFF) {
+            controller.send(MagicshineProtocol.buildPresetFrame(MagicshineModule.MODULE_1, 0))
+            controller.send(MagicshineProtocol.buildPresetFrame(MagicshineModule.MODULE_2, 0))
+            return
+        }
+
+        val module = moduleFor(snapshot.outputTarget, snapshot.lastOnTarget)
+        val mode = when (snapshot.mode) {
+            SharedLightState.Mode.STEADY -> null
+            SharedLightState.Mode.SOS -> com.lenne0815.karoomagicshine.MagicshineMode.SOS
+            SharedLightState.Mode.BLITZ -> com.lenne0815.karoomagicshine.MagicshineMode.BLITZ
+        }
+        if (mode == null) {
+            controller.send(MagicshineProtocol.buildPresetFrame(module, snapshot.levelPercent ?: 100))
+        } else {
+            controller.startRepeatingCommand(MagicshineProtocol.buildModeFrame(module, mode), 1_500L)
+        }
+    }
+
+    private fun moduleFor(
+        outputTarget: SharedLightState.OutputTarget,
+        fallbackTarget: SharedLightState.OutputTarget,
+    ): MagicshineModule = when (if (outputTarget == SharedLightState.OutputTarget.OFF) fallbackTarget else outputTarget) {
+        SharedLightState.OutputTarget.HIGH -> MagicshineModule.MODULE_2
+        SharedLightState.OutputTarget.LOW,
+        SharedLightState.OutputTarget.OFF -> MagicshineModule.MODULE_1
+    }
+
+    private fun cancelRideFlash() {
+        val job = pendingFlashJob ?: return
+        pendingFlashJob = null
+        job.cancel()
+        controller.stopRepeatingCommand()
+        RideFieldState.stopFlash(this)
     }
 
     fun registerListener(listener: Listener) {
@@ -383,14 +493,23 @@ class MagicshineControlService : Service() {
         }
     }
     fun disconnect() {
+        cancelRideFlash()
         cancelPendingWork()
         controller.disconnect()
         stopForegroundIfHeld()
     }
-    fun send(frameHex: String) = controller.send(frameHex)
-    fun startRepeatingCommand(frameHex: String, intervalMs: Long = 1500L) =
+    fun send(frameHex: String) {
+        cancelRideFlash()
+        controller.send(frameHex)
+    }
+    fun startRepeatingCommand(frameHex: String, intervalMs: Long = 1500L) {
+        cancelRideFlash()
         controller.startRepeatingCommand(frameHex, intervalMs)
-    fun stopRepeatingCommand() = controller.stopRepeatingCommand()
+    }
+    fun stopRepeatingCommand() {
+        cancelRideFlash()
+        controller.stopRepeatingCommand()
+    }
     fun currentStatus(): String = controller.currentStatus()
     fun currentConnectionStatus(): String = controller.currentConnectionStatus()
     fun currentBatteryStatus(): String = controller.currentBatteryStatus()

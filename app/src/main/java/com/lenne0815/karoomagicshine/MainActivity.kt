@@ -504,6 +504,11 @@ class MainActivity : AppCompatActivity() {
                 SharedLightState.OutputTarget.LOW
             },
             preservedLevel,
+            when (mode) {
+                MagicshineMode.STEADY -> SharedLightState.Mode.STEADY
+                MagicshineMode.SOS -> SharedLightState.Mode.SOS
+                MagicshineMode.BLITZ -> SharedLightState.Mode.BLITZ
+            },
         )
         updateOutputControls()
         updateBrightnessControls()
