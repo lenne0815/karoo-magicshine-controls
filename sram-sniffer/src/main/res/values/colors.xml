@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="sniffer_background">#101820</color>
+    <color name="sniffer_panel">#18242E</color>
+    <color name="sniffer_accent">#F2C14E</color>
+    <color name="sniffer_text">#F4F1DE</color>
+    <color name="sniffer_muted">#AEB7BE</color>
+</resources>
