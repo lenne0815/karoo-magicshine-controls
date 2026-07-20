@@ -1,11 +1,11 @@
 {
   "label": "Magicshine Controls",
   "packageName": "com.lenne0815.karoomagicshine",
-  "iconUrl": "https://github.com/lenne0815/karoo-magicshine-controls/releases/download/beta-1.4.0/icon.png",
-  "latestApkUrl": "https://github.com/lenne0815/karoo-magicshine-controls/releases/download/beta-1.4.0/karoo-magicshine-controls-beta-1.4.0.apk",
-  "latestVersion": "Beta 1.4.0",
-  "latestVersionCode": 29,
+  "iconUrl": "https://github.com/lenne0815/karoo-magicshine-controls/releases/download/beta-1.4.1/icon.png",
+  "latestApkUrl": "https://github.com/lenne0815/karoo-magicshine-controls/releases/download/beta-1.4.1/karoo-magicshine-controls-beta-1.4.1.apk",
+  "latestVersion": "Beta 1.4.1",
+  "latestVersionCode": 30,
   "developer": "Lennart Thomsen",
   "description": "Control supported Magicshine lights from the Karoo app or the in-ride field, with lamp selection, quick beam switching, and battery and temperature telemetry.",
-  "releaseNotes": "* Expands the ride field to light, five-second flash, battery, and app segments\n* Restores the previous OFF, steady, SOS, or continuous flash state after five seconds\n* Adds compact icons to every ride-field segment"
+  "releaseNotes": "* Shows truthful HIGH, MID, and LOW battery states for EVO 1700 firmware v1\n* Colors the battery indicator green, orange, or red in the app and ride field\n* Adds a separate Magicshine BLE sniffer and full protocol documentation"
 }

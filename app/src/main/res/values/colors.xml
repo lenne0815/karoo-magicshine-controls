@@ -12,6 +12,7 @@
     <color name="karoo_ui_green">#FF20D39B</color>
     <color name="karoo_ui_green_dark">#FF18B987</color>
     <color name="karoo_ui_green_soft">#FF76DEC0</color>
+    <color name="karoo_ui_red">#FFD93D3D</color>
     <color name="karoo_ui_card">#FF6B6B6B</color>
     <color name="karoo_ui_card_dark">#FF575757</color>
     <color name="karoo_ui_card_light">#FFF1F1F1</color>

@@ -26,3 +26,4 @@ dependencyResolutionManagement {
 rootProject.name = "Karoo Magicshine Controls"
 include ':app'
 include ':sram-sniffer'
+include ':magicshine-sniffer'

@@ -74,9 +74,9 @@ class LightControlsDataType(extension: String) : DataTypeImpl(extension, TYPE_ID
                 val enabled = LightActionReceiver.isToggleEnabled(context)
                 val status = LightFieldState.get(context)
                 val snapshot = SharedLightState.get(context)
-                val batteryPercent = RideFieldState.batteryPercent(context)
+                val batteryStatus = RideFieldState.batteryStatus(context)
                 val isFlashing = RideFieldState.isFlashing(context)
-                val signature = "$RENDER_VERSION|$enabled|$status|${snapshot.outputTarget}|${snapshot.levelPercent}|${snapshot.mode}|${snapshot.lastOnTarget}|${snapshot.lastOnLevelPercent}|${snapshot.lastOnMode}|$batteryPercent|$isFlashing"
+                val signature = "$RENDER_VERSION|$enabled|$status|${snapshot.outputTarget}|${snapshot.levelPercent}|${snapshot.mode}|${snapshot.lastOnTarget}|${snapshot.lastOnLevelPercent}|${snapshot.lastOnMode}|$batteryStatus|$isFlashing"
                 if (lastSignature != signature) {
                     val remoteViews = glance.compose(context, DpSize(viewWidth, viewHeight)) {
                         LightRideField(
@@ -86,7 +86,7 @@ class LightControlsDataType(extension: String) : DataTypeImpl(extension, TYPE_ID
                                 background = if (isFlashing) ORANGE_COLOR else CARD_COLOR,
                                 iconRes = R.drawable.ic_flash_on,
                             ),
-                            batteryLabel = batteryPercent?.let { "$it%" } ?: "--%",
+                            batteryUi = buildBatteryUi(batteryStatus),
                             totalWidth = viewWidth,
                             totalHeight = viewHeight,
                             baseTextSize = baseTextSize,
@@ -135,6 +135,14 @@ class LightControlsDataType(extension: String) : DataTypeImpl(extension, TYPE_ID
         return ui
     }
 
+    private fun buildBatteryUi(status: String?): ButtonUi = when (status) {
+        "HIGH" -> ButtonUi("HIGH", GREEN_COLOR, iconRes = R.drawable.ic_battery_level)
+        "MID" -> ButtonUi("MID", ORANGE_COLOR, iconRes = R.drawable.ic_battery_level)
+        "LOW" -> ButtonUi("LOW", LOW_COLOR, iconRes = R.drawable.ic_battery_level)
+        null -> ButtonUi("--", CARD_DARK_COLOR, iconRes = R.drawable.ic_battery_level)
+        else -> ButtonUi(status, CARD_DARK_COLOR, iconRes = R.drawable.ic_battery_level)
+    }
+
     private fun buildActualStateLabel(snapshot: SharedLightState.Snapshot): String {
         if (snapshot.outputTarget == SharedLightState.OutputTarget.OFF) return "OFF"
         val level = snapshot.levelPercent ?: snapshot.lastOnLevelPercent ?: 100
@@ -150,7 +158,7 @@ class LightControlsDataType(extension: String) : DataTypeImpl(extension, TYPE_ID
     private fun LightRideField(
         toggleUi: ButtonUi,
         flashUi: ButtonUi,
-        batteryLabel: String,
+        batteryUi: ButtonUi,
         totalWidth: Dp,
         totalHeight: Dp,
         baseTextSize: TextUnit,
@@ -169,7 +177,7 @@ class LightControlsDataType(extension: String) : DataTypeImpl(extension, TYPE_ID
             hasIcon = true,
         )
         val flashTextSize = fieldTextSize(flashUi.label, cellWidth, totalHeight, baseTextSize, false, hasIcon = true)
-        val batteryTextSize = fieldTextSize(batteryLabel, cellWidth, totalHeight, baseTextSize, false, hasIcon = true)
+        val batteryTextSize = fieldTextSize(batteryUi.label, cellWidth, totalHeight, baseTextSize, false, hasIcon = true)
         val appTextSize = fieldTextSize("APP", cellWidth, totalHeight, baseTextSize, false, hasIcon = true)
         val iconSize = (totalHeight.value * 0.24f).coerceIn(14f, 20f).dp
         Row(
@@ -204,14 +212,14 @@ class LightControlsDataType(extension: String) : DataTypeImpl(extension, TYPE_ID
             )
             Spacer(modifier = GlanceModifier.width(gap))
             FieldCell(
-                label = batteryLabel,
-                background = CARD_DARK_COLOR,
+                label = batteryUi.label,
+                background = batteryUi.background,
                 modifier = GlanceModifier
                     .width(cellWidth)
                     .fillMaxHeight(),
                 textSize = batteryTextSize,
                 maxLines = 1,
-                iconRes = R.drawable.ic_battery_level,
+                iconRes = batteryUi.iconRes,
                 iconSize = iconSize,
             )
             Spacer(modifier = GlanceModifier.width(gap))
@@ -297,11 +305,12 @@ class LightControlsDataType(extension: String) : DataTypeImpl(extension, TYPE_ID
 
     companion object {
         const val TYPE_ID = "DATATYPE_LIGHT_CONTROLS"
-        private const val RENDER_VERSION = 12
+        private const val RENDER_VERSION = 13
 
         private val GREEN_COLOR = Color(0xFF20D39B)
         private val CARD_COLOR = Color(0xFF6B6B6B)
         private val CARD_DARK_COLOR = Color(0xFF575757)
         private val ORANGE_COLOR = Color(0xFFFF6B00)
+        private val LOW_COLOR = Color(0xFFD93D3D)
     }
 }

@@ -18,11 +18,18 @@ Add the Magicshine field to a Karoo ride page to get four in-ride segments:
 
 - light state toggles between `OFF` and the remembered last output, level, and mode
 - `FLASH` flashes the selected light output for five seconds, then restores its previous state
-- battery shows the latest percentage reported by the connected light, or `--%` while unavailable
+- battery shows `HIGH`, `MID`, or `LOW` for the tested EVO 1700, or a percentage on compatible continuous-telemetry firmware
 - `APP` opens the full app
 - the field disconnects again when you leave the ride screen
 
 ## Release Notes
+
+### Beta 1.4.1
+
+- maps the EVO 1700's confirmed A4 values 100, 50, and 30 to truthful `HIGH`, `MID`, and `LOW` battery states
+- colors battery status green, orange, or red in the app and ride field
+- falls back to an unavailable state for unknown EVO 1700 battery values instead of guessing
+- adds the separate Magicshine BLE sniffer and documents the complete full-power discharge capture
 
 ### Beta 1.4.0
 
@@ -107,12 +114,14 @@ The current selector gate looks for BLE names starting with:
 ## Current Caveats
 
 - The current implementation is tuned to the tested light variant, not the full Magicshine product line.
+- EVO 1700 firmware v1 exposes only coarse 100/50/30 battery states over BLE, remaining at 30 until shutdown. The app deliberately presents these as `HIGH`, `MID`, and `LOW`, not exact percentages.
 - The Karoo UI is the primary target; generic phone layouts are not a focus yet.
 
 ## Diagnostics
 
 - SRAM/ANT investigation notes live in `SRAM_SNIFFER_NOTES.md`.
 - The separate diagnostic app lives in `sram-sniffer/` and is intentionally decoupled from the Magicshine control app.
+- Magicshine protocol findings and the separate BLE diagnostic app are documented in `MAGICSHINE_BLE_SNIFFER_NOTES.md`.
 
 ## License
 

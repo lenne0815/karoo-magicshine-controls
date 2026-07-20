@@ -91,7 +91,7 @@ class MainActivity : AppCompatActivity() {
         override fun onBatteryStatus(status: String) {
             runOnUiThread {
                 currentBatteryStatus = status
-                batteryView.text = status
+                renderBatteryStatus(status)
                 updateConnectButton()
             }
         }
@@ -321,7 +321,7 @@ class MainActivity : AppCompatActivity() {
         }
         if (currentBatteryStatus != batteryStatus) {
             currentBatteryStatus = batteryStatus
-            batteryView.text = batteryStatus
+            renderBatteryStatus(batteryStatus)
         }
         if (currentTemperatureStatus != temperatureStatus) {
             currentTemperatureStatus = temperatureStatus
@@ -341,6 +341,17 @@ class MainActivity : AppCompatActivity() {
         updateConnectButton()
         updateOutputControls()
         updateBrightnessControls()
+    }
+
+    private fun renderBatteryStatus(status: String) {
+        batteryView.text = status
+        val color = when (status) {
+            "HIGH" -> R.color.karoo_ui_green
+            "MID" -> R.color.karoo_orange
+            "LOW" -> R.color.karoo_ui_red
+            else -> R.color.white
+        }
+        batteryView.setTextColor(getColor(color))
     }
 
     private fun applySharedLightState() {

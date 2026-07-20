@@ -4,21 +4,25 @@ import android.content.Context
 
 object RideFieldState {
     private const val PREFS_NAME = "magicshine_prefs"
-    private const val PREF_BATTERY_PERCENT = "ride_field_battery_percent"
+    private const val PREF_BATTERY_STATUS = "ride_field_battery_status"
+    private const val LEGACY_PREF_BATTERY_PERCENT = "ride_field_battery_percent"
     private const val PREF_FLASH_UNTIL_MS = "ride_field_flash_until_ms"
 
-    fun batteryPercent(context: Context): Int? {
+    fun batteryStatus(context: Context): String? {
         val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        if (!prefs.contains(PREF_BATTERY_PERCENT)) return null
-        return prefs.getInt(PREF_BATTERY_PERCENT, -1).takeIf { it in 0..100 }
+        return prefs.getString(PREF_BATTERY_STATUS, null)
     }
 
     fun setBatteryStatus(context: Context, status: String) {
-        val percent = status.removeSuffix("%").toIntOrNull()?.takeIf { it in 0..100 }
+        val normalized = status.takeIf {
+            it == "HIGH" || it == "MID" || it == "LOW" ||
+                it.removeSuffix("%").toIntOrNull()?.let { value -> value in 0..100 } == true
+        }
         val editor = context.applicationContext
             .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
-        if (percent == null) editor.remove(PREF_BATTERY_PERCENT) else editor.putInt(PREF_BATTERY_PERCENT, percent)
+            .remove(LEGACY_PREF_BATTERY_PERCENT)
+        if (normalized == null) editor.remove(PREF_BATTERY_STATUS) else editor.putString(PREF_BATTERY_STATUS, normalized)
         editor.apply()
     }
 

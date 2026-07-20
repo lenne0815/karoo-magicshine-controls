@@ -519,8 +519,9 @@ class MagicshineBleController(
     }
 
     private fun parseNotifyFrame(frameHex: String) {
-        MagicshineProtocol.parseBatteryPercent(frameHex)?.let {
-            publishBatteryStatus("$it%")
+        val lampName = currentSelectedLamp()?.name ?: lastPeripheral?.name
+        if (MagicshineProtocol.parseBatteryPercent(frameHex) != null) {
+            publishBatteryStatus(MagicshineProtocol.parseBatteryStatus(frameHex, lampName) ?: "?")
         }
         MagicshineProtocol.parseTemperatureCelsius(frameHex)?.let { publishTemperatureStatus("${it}C") }
     }

@@ -71,6 +71,23 @@ object MagicshineProtocol {
         return bytes.getOrNull(5)?.takeIf { it in 0..100 }
     }
 
+    fun parseBatteryStatus(frameHex: String, lampName: String?): String? {
+        val value = parseBatteryPercent(frameHex) ?: return null
+        if (!usesCoarseBatteryTelemetry(lampName)) return "$value%"
+        return when (value) {
+            100 -> "HIGH"
+            50 -> "MID"
+            30 -> "LOW"
+            else -> null
+        }
+    }
+
+    fun usesCoarseBatteryTelemetry(lampName: String?): Boolean {
+        val normalized = lampName?.replace("\u0000", "")?.trim().orEmpty()
+        return normalized.startsWith("M2-B0", ignoreCase = true) ||
+            normalized.startsWith("M2-BO", ignoreCase = true)
+    }
+
     fun parseTemperatureCelsius(frameHex: String): Int? {
         val clean = frameHex.uppercase()
         if (!clean.startsWith("DE0DB1")) return null

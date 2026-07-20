@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ExtensionInfo
+    id="karoo-magicshine-sniffer"
+    displayName="@string/app_name"
+    icon="@drawable/ic_launcher"
+    scansDevices="false" />

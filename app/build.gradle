@@ -16,8 +16,8 @@ android {
         applicationId "com.lenne0815.karoomagicshine"
         minSdk 26
         targetSdk 34
-        versionCode 29
-        versionName "Beta 1.4.0"
+        versionCode 30
+        versionName "Beta 1.4.1"
     }
 
     buildTypes {
@@ -50,4 +50,6 @@ dependencies {
 
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.0'
     implementation("no.nordicsemi.kotlin.ble:client-android:2.0.0-alpha02")
+
+    testImplementation 'junit:junit:4.13.2'
 }
