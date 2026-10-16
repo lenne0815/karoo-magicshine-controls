@@ -70,7 +70,7 @@ class AntDirectTestActivity : AppCompatActivity() {
         root.addView(Button(this).apply {
             text = "REFRESH ANT DIAGNOSTIC"
             isAllCaps = false
-            setOnClickListener { antDiagnostic.text = "ANT: ${ant.diagnosticStage}\n${ant.binderDescriptorReport}" }
+            setOnClickListener { antDiagnostic.text = "ANT: ${ant.diagnosticStage}\n${ant.binderDescriptorReport}\n${ant.transactionInspectionReport}" }
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 55))
         status = TextView(this).apply {
             text = "High beam BLE: starting"
@@ -117,7 +117,7 @@ class AntDirectTestActivity : AppCompatActivity() {
                     }
                     runOnUiThread {
                         updateModeStatus(if (ok) null else "ANT unavailable")
-                        antDiagnostic.text = "ANT: ${ant.diagnosticStage}\n${ant.binderDescriptorReport}"
+                        antDiagnostic.text = "ANT: ${ant.diagnosticStage}\n${ant.binderDescriptorReport}\n${ant.transactionInspectionReport}"
                     }
                 }
             }

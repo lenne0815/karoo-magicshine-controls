@@ -32,6 +32,7 @@ class KarooLightControl(private val context: Context) {
 
     @Volatile var diagnosticStage: String = "Not bound"
     @Volatile var binderDescriptorReport: String = "Descriptor check pending"
+    @Volatile var transactionInspectionReport: String = "Transaction inspection pending"
         private set
 
     private var sensorBinder: IBinder? = null
@@ -70,6 +71,7 @@ class KarooLightControl(private val context: Context) {
             Timber.d("$TAG: Connected to SensorService")
             if (service != null) {
                 serviceExecutor.execute {
+                    inspectSensorTransactions()
                     getLightCommandBinder(service)
                     loadLightModeClass()
                 }
@@ -110,6 +112,32 @@ class KarooLightControl(private val context: Context) {
             data.recycle()
             reply.recycle()
         }
+    }
+
+    /** Read-only reflection of the installed firmware's AIDL Stub constants.
+     * No speculative Binder transactions are sent to the sensor service.
+     */
+    private fun inspectSensorTransactions() {
+        transactionInspectionReport = try {
+            val pkg = context.createPackageContext(
+                "io.hammerhead.sensorservice",
+                Context.CONTEXT_INCLUDE_CODE or Context.CONTEXT_IGNORE_SECURITY,
+            )
+            val stub = pkg.classLoader.loadClass(
+                "io.hammerhead.sensorservice.SensorServiceAIDL\$Stub"
+            )
+            val fields = stub.declaredFields.filter { it.name.startsWith("TRANSACTION_") }
+                .mapNotNull { field ->
+                    runCatching {
+                        field.isAccessible = true
+                        "${field.name}=${field.getInt(null)}"
+                    }.getOrNull()
+                }.sorted()
+            "Firmware AIDL transactions (${fields.size}):\n" + fields.joinToString("\n")
+        } catch (e: Exception) {
+            "AIDL reflection unavailable: ${e.javaClass.simpleName}: ${e.message}"
+        }
+        Timber.i("$TAG: $transactionInspectionReport")
     }
 
     private fun loadLightModeClass() {
