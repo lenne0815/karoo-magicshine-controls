@@ -293,7 +293,7 @@ class MagicshineControlService : Service() {
                 else -> "STEADY4"
             }
             SharedLightState.set(this, SharedLightState.OutputTarget.LOW, level)
-            scope.launch { antLightControl.setLightMode(HORI_ANT_DEVICE_ID, antMode) }
+            scope.launch { timber.log.Timber.i("HORI_ANT_DIAG ride command device=$HORI_ANT_DEVICE_ID mode=$antMode"); val ok = antLightControl.setLightMode(HORI_ANT_DEVICE_ID, antMode); timber.log.Timber.i("HORI_ANT_DIAG ride result mode=$antMode submitted=$ok") }
         }
     }
 
@@ -315,7 +315,7 @@ class MagicshineControlService : Service() {
                 Hori1300Mode.HIGH_BEAM -> 100
             }
             SharedLightState.set(this, SharedLightState.OutputTarget.LOW, level)
-            scope.launch { antLightControl.setLightMode(HORI_ANT_DEVICE_ID, antMode) }
+            scope.launch { timber.log.Timber.i("HORI_ANT_DIAG ride command device=$HORI_ANT_DEVICE_ID mode=$antMode"); val ok = antLightControl.setLightMode(HORI_ANT_DEVICE_ID, antMode); timber.log.Timber.i("HORI_ANT_DIAG ride result mode=$antMode submitted=$ok") }
             return
         }
         pendingToggleJob = scope.launch {
