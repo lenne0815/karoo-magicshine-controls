@@ -30,6 +30,9 @@ class KarooLightControl(private val context: Context) {
         private const val TX_GET_LIGHT_CMD = 17
     }
 
+    @Volatile var diagnosticStage: String = "Not bound"
+        private set
+
     private var sensorBinder: IBinder? = null
     private var lightCmdBinder: IBinder? = null
     private var lightModeParcelableCreator: ((String) -> Parcelable)? = null
@@ -54,6 +57,7 @@ class KarooLightControl(private val context: Context) {
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             sensorBinder = service
+            diagnosticStage = if (service == null) "Connected: null binder" else "SensorService connected"
             isBound = true
             Timber.d("$TAG: Connected to SensorService")
             if (service != null) {
@@ -65,6 +69,7 @@ class KarooLightControl(private val context: Context) {
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
+            diagnosticStage = "SensorService disconnected"
             sensorBinder = null
             lightCmdBinder = null
             isBound = false
@@ -82,8 +87,10 @@ class KarooLightControl(private val context: Context) {
             service.transact(TX_GET_LIGHT_CMD, data, reply, 0)
             reply.readException()
             lightCmdBinder = reply.readStrongBinder()
+            diagnosticStage = if (lightCmdBinder == null) "LightCommand binder missing" else "LightCommand binder ready"
             Timber.d("$TAG: Got LightCommand binder: $lightCmdBinder")
         } catch (e: Exception) {
+            diagnosticStage = "LightCommand error: ${e.javaClass.simpleName}: ${e.message}"
             Timber.e(e, "$TAG: Failed to get LightCommand binder")
         } finally {
             data.recycle()
@@ -141,6 +148,7 @@ class KarooLightControl(private val context: Context) {
                 Timber.w("$TAG: Could not find Device constructor with DefaultConstructorMarker")
             }
 
+            diagnosticStage = "LightMode loaded; device=${deviceCreator != null}; cmd=${lightCmdBinder != null}"
             Timber.d("$TAG: LightMode class loaded")
 
             pendingRegistrations.toList().forEach { registerConnectionState(it) }
@@ -149,6 +157,7 @@ class KarooLightControl(private val context: Context) {
             pendingLightParamRegistrations.clear()
             onServiceReady?.invoke()
         } catch (e: Exception) {
+            diagnosticStage = "LightMode load error: ${e.javaClass.simpleName}: ${e.message}"
             Timber.e(e, "$TAG: Failed to load LightMode class")
         }
     }
@@ -163,10 +172,13 @@ class KarooLightControl(private val context: Context) {
             )
         }
         try {
-            context.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
-            bindRequested = true
+            val accepted = context.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+            Timber.i("$TAG: ANT_DIAG bindService accepted=$accepted")
+            diagnosticStage = if (accepted) "Binding accepted; waiting for service" else "bindService returned false"
+            bindRequested = accepted
             Timber.d("$TAG: Binding to SensorService")
         } catch (e: Exception) {
+            diagnosticStage = "Bind exception: ${e.javaClass.simpleName}: ${e.message}"
             Timber.e(e, "$TAG: Failed to bind")
         }
     }
@@ -193,11 +205,14 @@ class KarooLightControl(private val context: Context) {
     }
 
     fun setLightMode(deviceId: String, modeName: String): Boolean {
+        Timber.i("$TAG: ANT_DIAG request device=$deviceId mode=$modeName bound=$isBound lightBinder=${lightCmdBinder != null} modeCreator=${lightModeParcelableCreator != null} deviceCreator=${deviceCreator != null}")
         val binder = lightCmdBinder ?: run {
+            diagnosticStage = "Command blocked: LightCommand binder missing"
             Timber.w("$TAG: LightCommand binder not available")
             return false
         }
         val creator = lightModeParcelableCreator ?: run {
+            diagnosticStage = "Command blocked: LightMode not loaded"
             Timber.w("$TAG: LightMode class not loaded")
             return false
         }
@@ -227,12 +242,16 @@ class KarooLightControl(private val context: Context) {
             data.writeInt(1)
             bundle.writeToParcel(data, 0)
 
-            binder.transact(TX_SET_LIGHT_MODE, data, reply, 0)
+            val delivered = binder.transact(TX_SET_LIGHT_MODE, data, reply, 0)
+            Timber.i("$TAG: ANT_DIAG transact device=$deviceId mode=$modeName delivered=$delivered binderAlive=${binder.isBinderAlive}")
+            if (!delivered) { diagnosticStage = "Command transact returned false"; return false }
             reply.readException()
-            Timber.d("$TAG: setLightMode($deviceId, $modeName) OK")
+            Timber.i("$TAG: ANT_DIAG reply OK device=$deviceId mode=$modeName (not proof of lamp response)")
+            diagnosticStage = "Command accepted (lamp response unverified)"
             return true
         } catch (e: Exception) {
-            Timber.e(e, "$TAG: setLightMode($deviceId, $modeName) failed")
+            diagnosticStage = "Command error: ${e.javaClass.simpleName}: ${e.message}"
+            Timber.e(e, "$TAG: ANT_DIAG FAILED device=$deviceId mode=$modeName exception=${e.javaClass.simpleName}: ${e.message}")
             return false
         } finally {
             data.recycle()
