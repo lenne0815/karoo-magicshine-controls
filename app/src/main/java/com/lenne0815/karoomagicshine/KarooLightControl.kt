@@ -27,7 +27,7 @@ class KarooLightControl(private val context: Context) {
         private const val TX_SET_LIGHT_MODE = 3
         private const val TX_REGISTER_DEVICE_CONNECTION = 6
         private const val TX_UNREGISTER_DEVICE_CONNECTION = 7
-        private const val TX_GET_LIGHT_CMD = 17
+        private const val TX_GET_LIGHT_CMD = 18
     }
 
     @Volatile var diagnosticStage: String = "Not bound"
