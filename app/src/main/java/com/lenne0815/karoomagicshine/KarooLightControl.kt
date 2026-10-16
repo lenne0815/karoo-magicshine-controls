@@ -31,6 +31,8 @@ class KarooLightControl(private val context: Context) {
     }
 
     @Volatile var diagnosticStage: String = "Not bound"
+    @Volatile var binderDescriptorReport: String = "Descriptor check pending"
+        private set
         private set
 
     private var sensorBinder: IBinder? = null
@@ -57,6 +59,13 @@ class KarooLightControl(private val context: Context) {
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             sensorBinder = service
+            if (service != null) {
+                serviceExecutor.execute {
+                    val actual = runCatching { service.interfaceDescriptor }.getOrElse { "ERROR: ${it.javaClass.simpleName}: ${it.message}" }
+                    binderDescriptorReport = "Sensor expected=$SENSOR_DESCRIPTOR; actual=$actual; match=${actual == SENSOR_DESCRIPTOR}"
+                    Timber.i("$TAG: ANT_DESCRIPTOR $binderDescriptorReport")
+                }
+            }
             diagnosticStage = if (service == null) "Connected: null binder" else "SensorService connected"
             isBound = true
             Timber.d("$TAG: Connected to SensorService")
@@ -87,6 +96,12 @@ class KarooLightControl(private val context: Context) {
             service.transact(TX_GET_LIGHT_CMD, data, reply, 0)
             reply.readException()
             lightCmdBinder = reply.readStrongBinder()
+            val light = lightCmdBinder
+            if (light != null) {
+                val actual = runCatching { light.interfaceDescriptor }.getOrElse { "ERROR: ${it.javaClass.simpleName}: ${it.message}" }
+                binderDescriptorReport += "\nLight expected=$LIGHT_CMD_DESCRIPTOR; actual=$actual; match=${actual == LIGHT_CMD_DESCRIPTOR}"
+                Timber.i("$TAG: ANT_DESCRIPTOR $binderDescriptorReport")
+            }
             diagnosticStage = if (lightCmdBinder == null) "LightCommand binder missing" else "LightCommand binder ready"
             Timber.d("$TAG: Got LightCommand binder: $lightCmdBinder")
         } catch (e: Exception) {
