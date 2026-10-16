@@ -28,7 +28,6 @@ class AntDirectTestActivity : AppCompatActivity() {
     private lateinit var ble: MagicshineBleController
     private lateinit var status: TextView
     private lateinit var modeStatus: TextView
-    private lateinit var antDiagnostic: TextView
     private var normalMode = "HIGH"
     private var highBeam = false
 
@@ -65,13 +64,6 @@ class AntDirectTestActivity : AppCompatActivity() {
             setPadding(6, 0, 6, 4)
         }
         root.addView(modeStatus)
-        antDiagnostic = TextView(this).apply { textSize = 12f; gravity = Gravity.CENTER; text = "ANT diagnostic: tap REFRESH" }
-        root.addView(antDiagnostic)
-        root.addView(Button(this).apply {
-            text = "REFRESH ANT DIAGNOSTIC"
-            isAllCaps = false
-            setOnClickListener { antDiagnostic.text = "ANT: ${ant.diagnosticStage}\n${ant.binderDescriptorReport}\n${ant.transactionInspectionReport}" }
-        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 55))
         status = TextView(this).apply {
             text = "High beam BLE: starting"
             textSize = 12f
@@ -117,7 +109,6 @@ class AntDirectTestActivity : AppCompatActivity() {
                     }
                     runOnUiThread {
                         updateModeStatus(if (ok) null else "ANT unavailable")
-                        antDiagnostic.text = "ANT: ${ant.diagnosticStage}\n${ant.binderDescriptorReport}\n${ant.transactionInspectionReport}"
                     }
                 }
             }
