@@ -33,7 +33,6 @@ class KarooLightControl(private val context: Context) {
     @Volatile var diagnosticStage: String = "Not bound"
     @Volatile var binderDescriptorReport: String = "Descriptor check pending"
         private set
-        private set
 
     private var sensorBinder: IBinder? = null
     private var lightCmdBinder: IBinder? = null
