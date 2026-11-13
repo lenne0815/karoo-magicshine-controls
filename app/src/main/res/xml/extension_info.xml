@@ -12,6 +12,34 @@
         icon="@drawable/ic_launcher"
         graphical="true" />
 
+    <DataType
+        typeId="DATATYPE_LIGHT_TOGGLE"
+        displayName="@string/field_light_toggle"
+        description="@string/field_light_toggle_desc"
+        icon="@drawable/ic_flashlight_on"
+        graphical="true" />
+
+    <DataType
+        typeId="DATATYPE_LIGHT_FLASH"
+        displayName="@string/field_light_flash"
+        description="@string/field_light_flash_desc"
+        icon="@drawable/ic_flash_on"
+        graphical="true" />
+
+    <DataType
+        typeId="DATATYPE_LIGHT_BATTERY"
+        displayName="@string/field_light_battery"
+        description="@string/field_light_battery_desc"
+        icon="@drawable/ic_battery_level"
+        graphical="true" />
+
+    <DataType
+        typeId="DATATYPE_LIGHT_APP"
+        displayName="@string/field_light_app"
+        description="@string/field_light_app_desc"
+        icon="@drawable/ic_apps"
+        graphical="true" />
+
     <BonusAction actionId="light-off" displayName="@string/action_light_off" />
     <BonusAction actionId="light-10" displayName="@string/action_light_10" />
     <BonusAction actionId="light-100" displayName="@string/action_light_100" />

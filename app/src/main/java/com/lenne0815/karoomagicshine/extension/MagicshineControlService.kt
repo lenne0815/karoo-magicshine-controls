@@ -70,7 +70,7 @@ class MagicshineControlService : Service() {
     @Volatile private var pendingExtensionRetryJob: Job? = null
     @Volatile private var pendingBluetoothRetryJob: Job? = null
     @Volatile private var pendingConnectAfterBluetooth: Boolean = false
-    @Volatile private var activeFieldViews: Int = 0
+    private val fieldVisibility = RideFieldVisibility(CoroutineScope(scope.coroutineContext + Dispatchers.Main.immediate))
     @Volatile private var extensionReady: Boolean = false
     @Volatile private var pendingAutoConnect: Boolean = false
     @Volatile private var foregroundHeld: Boolean = false
@@ -124,31 +124,28 @@ class MagicshineControlService : Service() {
     }
 
     private fun markFieldVisible() {
-        val wasInvisible = activeFieldViews == 0
-        activeFieldViews += 1
-        Log.d(TAG, "field visible count=$activeFieldViews")
-        if (wasInvisible && !AppUiState.isActive(this) && extensionReady) {
+        val first = fieldVisibility.shown()
+        if (AppUiState.isActive(this) || (!first && !pendingAutoConnect)) return
+        if (extensionReady) {
+            pendingAutoConnect = false
             ensureConnectedInternal(forceRestart = false, delayMs = 250)
-        } else if (wasInvisible && !AppUiState.isActive(this)) {
+        } else {
             pendingAutoConnect = true
             Log.d(TAG, "field visible before extension ready; deferring connect")
         }
     }
 
     private fun markFieldHidden() {
-        activeFieldViews = (activeFieldViews - 1).coerceAtLeast(0)
-        Log.d(TAG, "field hidden count=$activeFieldViews")
-        if (activeFieldViews == 0) {
-            stopRepeatingCommand()
+        fieldVisibility.hidden(appIsActive = { AppUiState.isActive(this) }) {
+            pendingAutoConnect = false
             disconnect()
-            stopForegroundIfHeld()
         }
     }
 
     private fun markExtensionReady() {
         extensionReady = true
         Log.d(TAG, "extension ready")
-        if (pendingAutoConnect && activeFieldViews > 0 && !AppUiState.isActive(this)) {
+        if (pendingAutoConnect && fieldVisibility.visible && !AppUiState.isActive(this)) {
             pendingAutoConnect = false
             ensureConnectedInternal(forceRestart = false, delayMs = 250)
         }

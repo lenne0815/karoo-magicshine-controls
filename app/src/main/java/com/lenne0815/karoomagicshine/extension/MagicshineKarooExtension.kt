@@ -10,12 +10,14 @@ import android.content.IntentFilter
 import android.content.ServiceConnection
 import android.os.IBinder
 import android.util.Log
+import com.lenne0815.karoomagicshine.BuildConfig
 import io.hammerhead.karooext.KarooSystemService
+import io.hammerhead.karooext.extension.DataTypeImpl
 import io.hammerhead.karooext.extension.KarooExtension
 import io.hammerhead.karooext.models.ReleaseBluetooth
 import io.hammerhead.karooext.models.RequestBluetooth
 
-class MagicshineKarooExtension : KarooExtension("karoo-magicshine-controls", "1.0") {
+class MagicshineKarooExtension : KarooExtension("karoo-magicshine-controls", BuildConfig.VERSION_NAME) {
     companion object {
         private const val TAG = "MagicshineExt"
         private const val ACTION_RIDE_APP_OPENED = "io.hammerhead.intent.action.RIDE_APP_OPENED"
@@ -86,10 +88,8 @@ class MagicshineKarooExtension : KarooExtension("karoo-magicshine-controls", "1.
         }
     }
 
-    override val types by lazy {
-        listOf(
-            LightControlsDataType(extension),
-        )
+    override val types: List<DataTypeImpl> by lazy {
+        RideFieldLayout.entries.map { LightControlsDataType(extension, it) }
     }
 
     override fun onCreate() {

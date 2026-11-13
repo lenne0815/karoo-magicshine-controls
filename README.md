@@ -1,144 +1,38 @@
-# Karoo Magicshine Controls
+# Magicshine Controls for Karoo
 
-Karoo app and Karoo extension for controlling a Magicshine light over BLE.
+Control a Magicshine EVO 1700 from your Hammerhead Karoo. Keep the four controls in one strip, or put just **Flash** next to your speed. A tap flashes the light for two seconds, then restores what you were riding with, even if the light was off.
 
-![Karoo Magicshine Controls UI](docs/images/karoo-ui.png)
+[Download the 1.1 APK](https://github.com/lenne0815/karoo-magicshine-controls/releases/download/v1.1/karoo-magicshine-controls-1.1.apk) · [Release notes](CHANGELOG.md)
 
-## About
+| Ride profile editor | Connected EVO 1700 |
+| :---: | :---: |
+| <img src="docs/images/ride-fields.png" width="216" alt="Four individual light fields arranged in a two-by-two grid below speed"> | <img src="docs/images/light-controls.png" width="216" alt="Karoo light controls showing the low beam at 25 percent, battery HIGH and lamp temperature 33 Celsius"> |
 
-Magicshine Controls is a Karoo app plus ride-field extension for controlling supported Magicshine lights over BLE.
+The left screen is an editor preview with sample values. The right screen shows readings from a connected lamp.
 
-- Karoo-native control screen with telemetry
-- four-part in-ride field for light toggle, two-second flash, battery, and app launch
-- selection gate for supported lamp families
+## Set up the light
 
-## Ride Screen Button
+Install the APK on the Karoo. If you already have the extension, use **Update** in the Karoo Extensions Library. Turn the lamp on, open **Magicshine Controls**, select your lamp and tap **Connect**. Connecting reads the lamp status without changing its beam.
 
-Add the Magicshine field to a Karoo ride page to get four in-ride segments:
+In the app, choose the low or high beam and set it to **25, 50, 75 or 100%**. **SOS** and **Flash** here are continuous modes, unlike the two-second flash on the ride page. The app also shows the lamp temperature and has a **Disconnect** button.
 
-- light state toggles between `OFF` and the remembered last output, level, and mode
-- `FLASH` flashes the selected light output for two seconds, then restores its previous state
-- battery shows `HIGH`, `MID`, or `LOW` for the tested EVO 1700, or a percentage on compatible continuous-telemetry firmware
-- `APP` opens the full app
-- the field disconnects again when you leave the ride screen
+## Choose your ride fields
 
-The two-second action is the ride-field `FLASH` button. In the main app, `FLASH`
-still selects the continuous flashing lighting mode, alongside `SOS` and steady
-brightness settings.
+In the Karoo profile editor, open a data page and choose **Add Field**. Use **Light Controls** for the original full-width strip. If it's already in your profile, there's nothing to change. For a different layout, add any of these separately, alongside ordinary Karoo data:
 
-## Release Notes
+| Field | What it does |
+| --- | --- |
+| **Light On/Off** | Switches off, or brings back your last beam, brightness and mode. |
+| **Flash** | Flashes for two seconds and returns to the previous setting. |
+| **Light Battery** | Shows the lamp battery, not the Karoo battery. It's a readout, not a button. |
+| **Open App** | Opens the full control screen. This field alone doesn't request a lamp connection. |
 
-### 1.0
+## What the battery reading means
 
-- first release without a Beta label; version code 31 upgrades previous Beta builds
-- replaces the connect-time light blink/OFF sequence with read-only A4/A1 telemetry
-- refreshes battery and temperature every 30 seconds while connected; stale values become unavailable after 90 seconds without a response, checked at each poll
-- observes actual BLE disconnections and allows the app's CONNECT button to retry
-- uses one shared light state for the app and ride field instead of a separate toggle flag
-- releases the BLE connection even if the OFF write fails, with bounded cleanup time
-- cancels polling, flash, and other background jobs when the service is destroyed
-- shortens the ride-field FLASH to two seconds, protects in-flight Bluetooth writes, and starts its timer only after the first flash write
-- adds regression tests for polling, disconnect cleanup, state consistency, and BLE frame integrity
+On the tested **EVO 1700 (firmware v1)**, a full discharge produced only three Bluetooth values: 100, 50 and 30. The last value stayed at 30 until shutdown. That's why the field says **HIGH**, **MID** or **LOW**, rather than promising 30% when the lamp is about to go out. Missing or unrecognised readings show **--**. Firmware that reports a continuous level can display a percentage.
 
-### Beta 1.4.1
+The selector recognises Bluetooth names beginning with `M1-B0`, `M1-BO`, `M2-B0` or `M2-BO`. A matching name alone doesn't mean every feature has been tested on that model.
 
-- maps the EVO 1700's confirmed A4 values 100, 50, and 30 to truthful `HIGH`, `MID`, and `LOW` battery states
-- colors battery status green, orange, or red in the app and ride field
-- falls back to an unavailable state for unknown EVO 1700 battery values instead of guessing
-- adds the separate Magicshine BLE sniffer and documents the complete full-power discharge capture
-
-### Beta 1.4.0
-
-- expanded the ride field from two to four segments
-- added a five-second `FLASH` action with automatic restoration of `OFF`, steady, `SOS`, or continuous flash state
-- added live light battery percentage to the ride field
-- added compact status, flash, battery, and app icons to the ride field
-
-### Beta 1.3.5
-
-- reconnects through Karoo Bluetooth startup instead of giving up while a ride is active
-- fixes lamp discovery on Karoo by using an unfiltered BLE scan and advertisement names
-- sanitizes Magicshine lamp names before saving them
-
-### Beta 1.3.4
-
-- hardened Karoo extension lifecycle against Appstore service restarts
-- prevented unhandled Karoo binder disconnects during extension shutdown
-- kept the standard Karoo Extensions Library update flow
-
-### Beta 1.3.3
-
-- removed the in-app `UPDATE` button
-- restored the standard Karoo Extensions Library update flow
-- kept live manifest metadata so Karoo can show its system `UPDATE` button
-
-### Beta 1.3.2
-
-- added in-app `UPDATE` button that opens the official Karoo Appstore detail page
-- kept update handoff in Hammerhead Appstore instead of silent installing
-- pointed future update checks at the live GitHub manifest
-
-### Beta 1.3.1
-
-- hardened app `CONNECT` recovery from stale `found` / disconnected states
-- added short multi-attempt BLE reconnect after transient GATT failures
-- avoided unnecessary reconnect work when already connected
-
-### Beta 1.3
-
-- reduced BLE scanning and retry churn when the lamp is not nearby
-- added fresh `NO LAMP` retry from the ride button
-- added fresh `CONNECT` retry from the app after a no-lamp miss
-- improved ride disconnect and field state handling
-
-### Beta 1.2.1
-
-- hardened ride reconnect after Bluetooth dropouts
-- reduced BLE scan churn in the ride extension
-- improved app and ride button state sync
-- improved disconnected and no-lamp field states
-
-### Beta 1.2
-
-- added ride screen button
-- added lamp selector gate
-- added support for `M2-B0` / `M2-BO` / `M1-B0` / `M1-BO` lamps
-- improved ride auto-connect and disconnect
-- improved app and ride state sync
-- refreshed icon and app metadata
-
-## Supported Light Families
-
-The current selector gate looks for BLE names starting with:
-
-- `M2-B0`
-- `M2-BO`
-- `M1-B0`
-- `M1-BO`
-
-## Karoo Flow
-
-1. Open the app on the Karoo.
-2. Choose the lamp once in the selection gate.
-3. Press `CONNECT`.
-4. Wait for the connected status; connecting no longer changes the light output.
-5. Choose `LOW`, `HIGH`, or `OFF`.
-6. Use `25`, `50`, `75`, `100`, `SOS`, or `FLASH`.
-7. Optionally add the Magicshine field to a ride page for quick in-ride control.
-8. Press `DISCONNECT` when finished.
-
-## Current Caveats
-
-- The current implementation is tuned to the tested light variant, not the full Magicshine product line.
-- EVO 1700 firmware v1 exposes only coarse 100/50/30 battery states over BLE, remaining at 30 until shutdown. The app deliberately presents these as `HIGH`, `MID`, and `LOW`, not exact percentages.
-- The Karoo UI is the primary target; generic phone layouts are not a focus yet.
-
-## Diagnostics
-
-- SRAM/ANT investigation notes live in `SRAM_SNIFFER_NOTES.md`.
-- The separate diagnostic app lives in `sram-sniffer/` and is intentionally decoupled from the Magicshine control app.
-- Magicshine protocol findings and the separate BLE diagnostic app are documented in `MAGICSHINE_BLE_SNIFFER_NOTES.md`.
-
-## License
+[Battery capture and protocol notes](MAGICSHINE_BLE_SNIFFER_NOTES.md) · [Ride field layout](docs/ride-field-layout.md) · [Separate SRAM sniffer](SRAM_SNIFFER_NOTES.md)
 
 MIT License

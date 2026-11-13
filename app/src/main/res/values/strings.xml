@@ -5,4 +5,12 @@
     <string name="action_light_100">Magicshine Light 100%</string>
     <string name="field_light_controls">Light Controls</string>
     <string name="field_light_controls_desc">Toggle or flash the light, view its battery, or open the app from the ride field</string>
+    <string name="field_light_toggle">Light On/Off</string>
+    <string name="field_light_toggle_desc">Toggle between off and the last lighting setting</string>
+    <string name="field_light_flash">Flash</string>
+    <string name="field_light_flash_desc">Flash for two seconds, then restore the previous light setting</string>
+    <string name="field_light_battery">Light Battery</string>
+    <string name="field_light_battery_desc">Show the battery status reported by the light</string>
+    <string name="field_light_app">Open App</string>
+    <string name="field_light_app_desc">Open Magicshine Controls</string>
 </resources>
